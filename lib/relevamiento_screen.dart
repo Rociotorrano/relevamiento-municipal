@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:relevamientomunicipal/servicios/guardado.dart';
+import 'package:relevamientomunicipal/main.dart';
 
 class RelevamientoScreen extends StatefulWidget {
   const RelevamientoScreen({Key? key}) : super(key: key);
@@ -52,9 +53,18 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   }
 
   Future<void> _loadInitialData() async {
-    localidades = await fetchLocalidades();
-    calles = await fetchCalles();
-    setState(() {});
+    final locs = await traerLocalidad('');
+    setState(() {
+      localidades = locs;
+    });
+  }
+
+  Future<void> _cargarCalles(String fklocalidad) async {
+    final cals = await traerCalle(fklocalidad);
+    setState(() {
+      calles = cals;
+      selectedCalle = null; // reset calle al cambiar localidad
+    });
   }
 
   Future<void> _buscarDatos() async {
@@ -74,26 +84,29 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     if (datos != null && datos.isNotEmpty) {
       setState(() {
         datosPersonales = datos;
-        
-        // Asignamos datos a los controladores (ajustar las keys según el JSON real)
-        _prefijoController.text = datos['prefijo']?.toString() ?? '';
-        _celularController.text = datos['celular']?.toString() ?? '';
-        _numeroCalleController.text = datos['numero_calle']?.toString() ?? '';
-        
-        String? locId = datos['id_localidad']?.toString() ?? datos['localidad']?.toString();
-        if (localidades.any((e) => (e['id']?.toString() ?? e.toString()) == locId)) {
-          selectedLocalidad = locId;
-        } else {
-          selectedLocalidad = null;
-        }
 
-        String? calleId = datos['id_calle']?.toString() ?? datos['calle']?.toString();
-        if (calles.any((e) => (e['id']?.toString() ?? e.toString()) == calleId)) {
-          selectedCalle = calleId;
-        } else {
-          selectedCalle = null;
-        }
+        // Campos del backend: telefono, domicilio, localidad (texto)
+        _prefijoController.text = '';
+        _celularController.text = datos['telefono']?.toString() ?? '';
+        // El domicilio viene completo: "MITRE 1602 P 1 D8"
+        // Lo mostramos en el campo número
+        _numeroCalleController.text = datos['domicilio']?.toString() ?? '';
+
+        // Localidad viene como texto, buscamos coincidencia por nombre
+        String? locNombre = datos['localidad']?.toString()?.trim();
+        final locMatch = localidades.cast<Map<String, dynamic>?>().firstWhere(
+          (e) => e != null && (e['localidad']?.toString()?.trim().toUpperCase() == locNombre?.toUpperCase()),
+          orElse: () => null,
+        );
+        selectedLocalidad = locMatch != null ? locMatch['pklocalidad']?.toString() : null;
+        selectedCalle = null;
+        calles = []; // limpiar calles hasta que se carguen
       });
+
+      // Cargar calles de la localidad del legajo
+      if (selectedLocalidad != null) {
+        _cargarCalles(selectedLocalidad!);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se encontraron datos para ese legajo')),
@@ -144,8 +157,16 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Relevamiento Municipal'),
+        title: const Text('Formulario', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF40A5DD),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () {
+              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
+            },
+          )
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -155,8 +176,6 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             _buildIniciarRelevamientoCard(),
             const SizedBox(height: 16),
             if (datosPersonales != null) _buildDatosPersonalesCard(),
-            const SizedBox(height: 16),
-            if (datosPersonales != null) _buildLugarTrabajoCard(),
             const SizedBox(height: 16),
             if (datosPersonales != null) _buildPreguntasForm(),
           ],
@@ -170,48 +189,46 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 2,
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Text(
               'Iniciar relevamiento',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF284b72),
+                color: Color(0xFF40A5DD), // Celeste
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _legajoController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              decoration: InputDecoration(
+                labelText: 'Numero de legajo',
+                prefixIcon: const Icon(Icons.badge, color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _legajoController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Numero de legajo',
-                      prefixIcon: const Icon(Icons.badge, color: Colors.grey),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                    ),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _buscarDatos,
+                icon: const Icon(Icons.search, color: Colors.white),
+                label: const Text('BUSCAR DATOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.grey.shade600, // Gris opaco
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  onPressed: _buscarDatos,
-                  icon: const Icon(Icons.search, color: Colors.white),
-                  label: const Text('BUSCAR DATOS', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFa4b9d6),
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -226,193 +243,135 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
                   'Datos personales',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF284b72),
-                  ),
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF284b72)),
                 ),
                 OutlinedButton.icon(
                   onPressed: _limpiarDatos,
                   icon: const Icon(Icons.refresh, color: Colors.red),
                   label: const Text('LIMPIAR', style: TextStyle(color: Colors.red)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                  ),
+                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            _buildReadOnlyField('Numero de legajo', datosPersonales?['legajo']?.toString() ?? '', Icons.badge),
+            const SizedBox(height: 12),
+            _buildReadOnlyField('Nombre y apellido', datosPersonales?['nombre_apellido']?.toString() ?? '', Icons.person_outline),
+            const SizedBox(height: 12),
+            _buildReadOnlyField('DNI', datosPersonales?['dni']?.toString() ?? '', Icons.badge_outlined),
+            const SizedBox(height: 12),
+            _buildReadOnlyField('Fecha de nacimiento', datosPersonales?['fecha_nacimiento']?.toString() ?? '', Icons.calendar_today),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _prefijoController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Prefijo', prefixIcon: Icon(Icons.phone, color: Colors.grey), border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _celularController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Numero de celular', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Localidad', prefixIcon: Icon(Icons.location_on, color: Colors.grey), border: OutlineInputBorder()),
+              value: selectedLocalidad,
+              isExpanded: true,
+              items: localidades.map((item) => DropdownMenuItem<String>(value: item['pklocalidad']?.toString() ?? item['id']?.toString() ?? item.toString(), child: Text(item['localidad']?.toString() ?? item['nombre']?.toString() ?? item.toString()))).toList(),
+              onChanged: (val) {
+                setState(() {
+                  selectedLocalidad = val;
+                  selectedCalle = null;
+                  calles = [];
+                });
+                if (val != null) _cargarCalles(val);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Calle', prefixIcon: Icon(Icons.add_road, color: Colors.grey), border: OutlineInputBorder()),
+              value: selectedCalle,
+              isExpanded: true,
+              items: calles.map((item) => DropdownMenuItem<String>(value: item['pkcalle']?.toString() ?? item['id']?.toString() ?? item.toString(), child: Text(item['calle']?.toString() ?? item['nombre']?.toString() ?? item.toString()))).toList(),
+              onChanged: (val) => setState(() => selectedCalle = val),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _numeroCalleController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Numero', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Color(0xFF40A5DD), thickness: 1.5),
+            const SizedBox(height: 16),
+            const Text('Lugar de trabajo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
+            const SizedBox(height: 16),
+            _buildReadOnlyField('Secretaria', datosPersonales?['secretaria']?.toString() ?? '', Icons.business),
+            const SizedBox(height: 12),
+            _buildReadOnlyField('Nombre del lugar de trabajo', datosPersonales?['dependencia']?.toString() ?? '', Icons.work),
+            const SizedBox(height: 16),
+            const Divider(color: Color(0xFF40A5DD), thickness: 1.5),
+            const SizedBox(height: 16),
+            Stack(
               children: [
-                Expanded(
-                  flex: 3,
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildReadOnlyField('Numero de legajo', datosPersonales?['legajo']?.toString() ?? datosPersonales?['nro_legajo']?.toString() ?? '', Icons.badge),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildReadOnlyField('Nombre y apellido', datosPersonales?['nombre_completo']?.toString() ?? datosPersonales?['apellido_nombre']?.toString() ?? '', Icons.person_outline),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildReadOnlyField('DNI', datosPersonales?['dni']?.toString() ?? datosPersonales?['nro_documento']?.toString() ?? '', Icons.badge_outlined),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildReadOnlyField('Fecha de nacimiento', datosPersonales?['fecha_nacimiento']?.toString() ?? '', Icons.calendar_today),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: TextField(
-                              controller: _prefijoController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Prefijo',
-                                prefixIcon: Icon(Icons.phone, color: Colors.grey),
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: TextField(
-                              controller: _celularController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Numero de celular',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                labelText: 'Localidad',
-                                prefixIcon: Icon(Icons.location_on, color: Colors.grey),
-                                border: OutlineInputBorder(),
-                              ),
-                              value: selectedLocalidad,
-                              isExpanded: true,
-                              items: localidades.map((item) {
-                                return DropdownMenuItem<String>(
-                                  value: item['id']?.toString() ?? item.toString(),
-                                  child: Text(item['nombre']?.toString() ?? item.toString()),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  selectedLocalidad = val;
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 3,
-                            child: DropdownButtonFormField<String>(
-                              decoration: const InputDecoration(
-                                labelText: 'Calle',
-                                prefixIcon: Icon(Icons.add_road, color: Colors.grey),
-                                border: OutlineInputBorder(),
-                              ),
-                              value: selectedCalle,
-                              isExpanded: true,
-                              items: calles.map((item) {
-                                return DropdownMenuItem<String>(
-                                  value: item['id']?.toString() ?? item.toString(),
-                                  child: Text(item['nombre']?.toString() ?? item.toString()),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                setState(() {
-                                  selectedCalle = val;
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 2,
-                            child: TextField(
-                              controller: _numeroCalleController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Numero',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                Container(
+                  height: 250,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0F4F8),
+                    border: Border.all(color: const Color(0xFFB0C4DE), style: BorderStyle.solid),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: _imageFile != null
+                      ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.file(_imageFile!, fit: BoxFit.cover))
+                      : const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person, size: 100, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Foto de perfil', style: TextStyle(color: Colors.grey)),
+                          ],
+                        ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      Container(
-                        height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F4F8),
-                          border: Border.all(color: const Color(0xFFB0C4DE), style: BorderStyle.solid),
-                          borderRadius: BorderRadius.circular(10),
+                if (_imageFile != null)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _imageFile = null),
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
                         ),
-                        child: _imageFile != null
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: Image.file(_imageFile!, fit: BoxFit.cover),
-                              )
-                            : const Icon(Icons.person, size: 100, color: Colors.grey),
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(Icons.close, color: Colors.white, size: 20),
                       ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _tomarFoto,
-                          icon: const Icon(Icons.camera_alt),
-                          label: const Text('TOMAR FOTO'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF284b72),
-                            side: const BorderSide(color: Color(0xFF284b72)),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
               ],
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _tomarFoto,
+                icon: const Icon(Icons.camera_alt),
+                label: const Text('TOMAR FOTO', style: TextStyle(fontSize: 16)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF284b72),
+                  side: const BorderSide(color: Color(0xFF284b72)),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+              ),
             ),
           ],
         ),
@@ -429,49 +388,6 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         enabled: false,
       ),
       child: Text(value.isEmpty ? '-' : value, style: const TextStyle(fontSize: 16, color: Colors.black)),
-    );
-  }
-
-  Widget _buildLugarTrabajoCard() {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Lugar de trabajo',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF284b72),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildReadOnlyField(
-                    'Secretaria',
-                    datosPersonales?['secretaria']?.toString() ?? '',
-                    Icons.business,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildReadOnlyField(
-                    'Nombre del lugar de trabajo',
-                    datosPersonales?['lugar_trabajo']?.toString() ?? '',
-                    Icons.work,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 

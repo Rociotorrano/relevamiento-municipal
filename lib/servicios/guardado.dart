@@ -141,20 +141,20 @@ Future<List<RelevamientoMunicipal>?> login(
         }
         return null;
       } else {
-        print('La respuesta es incorrecta.');
-        if (context.mounted) dialogAceptar(context, data['error']?.toString() ?? 'Error desconocido', 0);
+        print('La respuesta es incorrecta. Datos del backend: $data');
+        if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
         return null;
       }
     } else {
       print('Falló con status: ${response.statusCode}');
       print('Razón: ${response.reasonPhrase}');
       print('Cuerpo de respuesta: ${response.body}');
-
+      if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
       return null;
     }
   } catch (error) {
     print('Error al intentar iniciar sesión: $error');
-    if (context.mounted) dialogAceptar(context, 'Error: $error', 0);
+    if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
     return null;
   }
 }
@@ -178,69 +178,84 @@ Future<Map<String, dynamic>?> buscarDatosLegajo(
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      return data is Map<String, dynamic> ? data : {"data": data};
+
+      // La respuesta viene dentro de 'datos_personales'
+      if (data is Map<String, dynamic> && data.containsKey('datos_personales')) {
+        return Map<String, dynamic>.from(data['datos_personales']);
+      }
+      if (data is Map<String, dynamic>) return data;
+      return null;
     } else {
-      print('Error al buscar legajo: ${response.statusCode}');
+      if (context.mounted) dialogAceptar(context, 'Error al buscar legajo: ${response.statusCode}', 0);
       return null;
     }
   } catch (e) {
     print('Error buscarDatosLegajo: $e');
+    if (context.mounted) dialogAceptar(context, 'Error: $e', 0);
     return null;
   }
 }
 
-Future<List<dynamic>> fetchLocalidades() async {
-  var url = Uri.parse(
-    'https://backend.sim.lacosta.gob.ar/generales/localidades',
-  );
+Future<List<Map<String, dynamic>>> traerLocalidad(String localidades) async {
+  var url = Uri.parse('https://backend.sim.lacosta.gob.ar/generales/localidades');
+
   try {
-    var response = await http.post(
+    final response = await http.post(
       url,
-      headers: <String, String>{
+      headers: {
         'Content-Type': 'application/json; charset=UTF-8',
         'Authorization': 'Bearer ${globals.miTokenGlobal}',
       },
-      body: jsonEncode({}),
+      body: jsonEncode({"localidades": localidades}),
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data is List) return data;
-      if (data is Map && data.containsKey('data')) return data['data'];
-      return [data];
+      final dynamic jsonBody = jsonDecode(response.body);
+
+      if (jsonBody is Map && jsonBody.containsKey('data') && jsonBody['data'] is List) {
+        return List<Map<String, dynamic>>.from(jsonBody['data']);
+      } else if (jsonBody is List) {
+        return List<Map<String, dynamic>>.from(jsonBody);
+      } else {
+        throw Exception('Formato de respuesta inesperado.');
+      }
     } else {
-      print('Error al buscar localidades: ${response.statusCode}');
-      return [];
+      throw Exception('Error en la solicitud: ${response.statusCode}');
     }
   } catch (e) {
-    print('Error fetchLocalidades: $e');
+    print('Error al obtener localidades: $e');
     return [];
   }
 }
 
-Future<List<dynamic>> fetchCalles() async {
+Future<List<Map<String, dynamic>>> traerCalle(String fklocalidad) async {
   var url = Uri.parse('https://backend.sim.lacosta.gob.ar/generales/calles');
+
   try {
-    var response = await http.post(
+    final response = await http.post(
       url,
-      headers: <String, String>{
+      headers: {
         'Content-Type': 'application/json; charset=UTF-8',
         'Authorization': 'Bearer ${globals.miTokenGlobal}',
       },
-      body: jsonEncode({}),
+      body: jsonEncode({"fklocalidad": fklocalidad}),
     );
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      if (data is List) return data;
-      if (data is Map && data.containsKey('data')) return data['data'];
-      return [data];
+      final dynamic jsonBody = jsonDecode(response.body);
+
+      if (jsonBody is Map && jsonBody.containsKey('data') && jsonBody['data'] is List) {
+        return List<Map<String, dynamic>>.from(jsonBody['data']);
+      } else if (jsonBody is List) {
+        return List<Map<String, dynamic>>.from(jsonBody);
+      } else {
+        throw Exception('Formato de respuesta inesperado.');
+      }
     } else {
-      print('Error al buscar calles: ${response.statusCode}');
-      return [];
+      throw Exception('Error en la solicitud: ${response.statusCode}');
     }
   } catch (e) {
-    print('Error fetchCalles: $e');
+    print('Error al obtener calles: $e');
     return [];
   }
 }
