@@ -13,10 +13,19 @@ class RelevamientoScreen extends StatefulWidget {
 }
 
 class _RelevamientoScreenState extends State<RelevamientoScreen> {
+  static const Map<String, String> _secretariasPorCodigo = {
+    'HE': 'SECRETARIA DE HACIENDA, ECONOMIA Y PLANIFICACION ESTRATEGICA',
+  };
+
+  static const Map<String, String> _dependenciasPorCodigo = {
+    '450': 'INFORMATICA',
+  };
+
   final TextEditingController _legajoController = TextEditingController();
   final TextEditingController _prefijoController = TextEditingController();
   final TextEditingController _celularController = TextEditingController();
   final TextEditingController _numeroCalleController = TextEditingController();
+  bool _mostrarCuestionario = false;
 
   Map<String, dynamic>? datosPersonales;
   List<dynamic> localidades = [];
@@ -42,7 +51,10 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   String? q10Cuidado;
   List<String> q11Vacaciones = [];
   String? q12Recuperacion;
-  final TextEditingController _observacionesController = TextEditingController();
+  final TextEditingController _observacionesController =
+      TextEditingController();
+  int _preguntaActual = 0;
+  static const int _totalPreguntas = 16;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -69,7 +81,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
 
   Future<void> _buscarDatos() async {
     if (_legajoController.text.isEmpty) return;
-    
+
     // Mostramos un indicador de carga
     showDialog(
       context: context,
@@ -78,7 +90,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     );
 
     var datos = await buscarDatosLegajo(context, _legajoController.text);
-    
+
     Navigator.of(context).pop(); // Ocultar carga
 
     if (datos != null && datos.isNotEmpty) {
@@ -95,10 +107,15 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         // Localidad viene como texto, buscamos coincidencia por nombre
         String? locNombre = datos['localidad']?.toString()?.trim();
         final locMatch = localidades.cast<Map<String, dynamic>?>().firstWhere(
-          (e) => e != null && (e['localidad']?.toString()?.trim().toUpperCase() == locNombre?.toUpperCase()),
+          (e) =>
+              e != null &&
+              (e['localidad']?.toString()?.trim().toUpperCase() ==
+                  locNombre?.toUpperCase()),
           orElse: () => null,
         );
-        selectedLocalidad = locMatch != null ? locMatch['pklocalidad']?.toString() : null;
+        selectedLocalidad = locMatch != null
+            ? locMatch['pklocalidad']?.toString()
+            : null;
         selectedCalle = null;
         calles = []; // limpiar calles hasta que se carguen
       });
@@ -108,10 +125,68 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         _cargarCalles(selectedLocalidad!);
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se encontraron datos para ese legajo')),
-      );
+      await _mostrarErrorLegajo();
     }
+  }
+
+  Future<void> _mostrarErrorLegajo() {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFFF16F75), width: 4),
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 58,
+                  color: Color(0xFFF16F75),
+                ),
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'Error',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF555555),
+                ),
+              ),
+              const SizedBox(height: 22),
+              const Text(
+                'No se pudieron cargar los datos personales. Verifique el legajo ingresado.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 17, color: Color(0xFF555555)),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF658EBC),
+                ),
+                child: const Text(
+                  'CONFIRMAR',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _limpiarDatos() {
@@ -141,6 +216,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       q11Vacaciones.clear();
       q12Recuperacion = null;
       _observacionesController.clear();
+      _preguntaActual = 0;
+      _mostrarCuestionario = false;
     });
   }
 
@@ -153,32 +230,64 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     }
   }
 
+  void _irAlCuestionario() {
+    setState(() => _mostrarCuestionario = true);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Formulario', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF40A5DD),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const LoginPage()));
-            },
-          )
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildIniciarRelevamientoCard(),
-            const SizedBox(height: 16),
-            if (datosPersonales != null) _buildDatosPersonalesCard(),
-            const SizedBox(height: 16),
-            if (datosPersonales != null) _buildPreguntasForm(),
-          ],
+    return PopScope(
+      canPop: !_mostrarCuestionario,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _mostrarCuestionario) {
+          setState(() => _mostrarCuestionario = false);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(
+            _mostrarCuestionario ? 'Relevamiento' : 'Formulario',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: const Color(0xFF40A5DD),
+          leading: _mostrarCuestionario
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  tooltip: 'Volver al formulario',
+                  onPressed: () => setState(() => _mostrarCuestionario = false),
+                )
+              : null,
+          actions: _mostrarCuestionario
+              ? []
+              : [
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LoginPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: _mostrarCuestionario
+              ? _buildPreguntasForm()
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildIniciarRelevamientoCard(),
+                    const SizedBox(height: 16),
+                    if (datosPersonales != null) _buildDatosPersonalesCard(),
+                  ],
+                ),
         ),
       ),
     );
@@ -220,7 +329,13 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               child: ElevatedButton.icon(
                 onPressed: _buscarDatos,
                 icon: const Icon(Icons.search, color: Colors.white),
-                label: const Text('BUSCAR DATOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                label: const Text(
+                  'BUSCAR DATOS',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.grey.shade600, // Gris opaco
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -250,42 +365,92 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               children: [
                 const Text(
                   'Datos personales',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF284b72)),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF284b72),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _limpiarDatos,
                   icon: const Icon(Icons.refresh, color: Colors.red),
-                  label: const Text('LIMPIAR', style: TextStyle(color: Colors.red)),
-                  style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+                  label: const Text(
+                    'LIMPIAR',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            _buildReadOnlyField('Numero de legajo', datosPersonales?['legajo']?.toString() ?? '', Icons.badge),
+            _buildReadOnlyField(
+              'Numero de legajo',
+              datosPersonales?['legajo']?.toString() ?? '',
+              Icons.badge,
+            ),
             const SizedBox(height: 12),
-            _buildReadOnlyField('Nombre y apellido', datosPersonales?['nombre_apellido']?.toString() ?? '', Icons.person_outline),
+            _buildReadOnlyField(
+              'Nombre y apellido',
+              datosPersonales?['nombre_apellido']?.toString() ?? '',
+              Icons.person_outline,
+            ),
             const SizedBox(height: 12),
-            _buildReadOnlyField('DNI', datosPersonales?['dni']?.toString() ?? '', Icons.badge_outlined),
+            _buildReadOnlyField(
+              'DNI',
+              datosPersonales?['dni']?.toString() ?? '',
+              Icons.badge_outlined,
+            ),
             const SizedBox(height: 12),
-            _buildReadOnlyField('Fecha de nacimiento', datosPersonales?['fecha_nacimiento']?.toString() ?? '', Icons.calendar_today),
+            _buildReadOnlyField(
+              'Fecha de nacimiento',
+              datosPersonales?['fecha_nacimiento']?.toString() ?? '',
+              Icons.calendar_today,
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: _prefijoController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Prefijo', prefixIcon: Icon(Icons.phone, color: Colors.grey), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Prefijo',
+                prefixIcon: Icon(Icons.phone, color: Colors.grey),
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _celularController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Numero de celular', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Numero de celular',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Localidad', prefixIcon: Icon(Icons.location_on, color: Colors.grey), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Localidad',
+                prefixIcon: Icon(Icons.location_on, color: Colors.grey),
+                border: OutlineInputBorder(),
+              ),
               value: selectedLocalidad,
               isExpanded: true,
-              items: localidades.map((item) => DropdownMenuItem<String>(value: item['pklocalidad']?.toString() ?? item['id']?.toString() ?? item.toString(), child: Text(item['localidad']?.toString() ?? item['nombre']?.toString() ?? item.toString()))).toList(),
+              items: localidades
+                  .map(
+                    (item) => DropdownMenuItem<String>(
+                      value:
+                          item['pklocalidad']?.toString() ??
+                          item['id']?.toString() ??
+                          item.toString(),
+                      child: Text(
+                        item['localidad']?.toString() ??
+                            item['nombre']?.toString() ??
+                            item.toString(),
+                      ),
+                    ),
+                  )
+                  .toList(),
               onChanged: (val) {
                 setState(() {
                   selectedLocalidad = val;
@@ -297,26 +462,72 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              decoration: const InputDecoration(labelText: 'Calle', prefixIcon: Icon(Icons.add_road, color: Colors.grey), border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Calle',
+                prefixIcon: Icon(Icons.add_road, color: Colors.grey),
+                border: OutlineInputBorder(),
+              ),
               value: selectedCalle,
               isExpanded: true,
-              items: calles.map((item) => DropdownMenuItem<String>(value: item['pkcalle']?.toString() ?? item['id']?.toString() ?? item.toString(), child: Text(item['calle']?.toString() ?? item['nombre']?.toString() ?? item.toString()))).toList(),
+              items: calles
+                  .map(
+                    (item) => DropdownMenuItem<String>(
+                      value:
+                          item['pkcalle']?.toString() ??
+                          item['id']?.toString() ??
+                          item.toString(),
+                      child: Text(
+                        item['calle']?.toString() ??
+                            item['nombre']?.toString() ??
+                            item.toString(),
+                      ),
+                    ),
+                  )
+                  .toList(),
               onChanged: (val) => setState(() => selectedCalle = val),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _numeroCalleController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Numero', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Numero',
+                border: OutlineInputBorder(),
+              ),
             ),
             const SizedBox(height: 16),
             const Divider(color: Color(0xFF40A5DD), thickness: 1.5),
             const SizedBox(height: 16),
-            const Text('Lugar de trabajo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
+            const Text(
+              'Lugar de trabajo',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
             const SizedBox(height: 16),
-            _buildReadOnlyField('Secretaria', datosPersonales?['secretaria']?.toString() ?? '', Icons.business),
+            _buildReadOnlyField(
+              'Secretaria',
+              _nombreLugarTrabajo(datosPersonales, const [
+                'nombre_secretaria',
+                'secretaria_nombre',
+                'secretaria',
+              ], _secretariasPorCodigo),
+              Icons.business,
+            ),
             const SizedBox(height: 12),
-            _buildReadOnlyField('Nombre del lugar de trabajo', datosPersonales?['dependencia']?.toString() ?? '', Icons.work),
+            _buildReadOnlyField(
+              'Nombre del lugar de trabajo',
+              _nombreLugarTrabajo(datosPersonales, const [
+                'nombre_dependencia',
+                'dependencia_nombre',
+                'nombre_lugar_trabajo',
+                'lugar_trabajo',
+                'dependencia',
+              ], _dependenciasPorCodigo),
+              Icons.work,
+            ),
             const SizedBox(height: 16),
             const Divider(color: Color(0xFF40A5DD), thickness: 1.5),
             const SizedBox(height: 16),
@@ -327,17 +538,26 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: const Color(0xFFF0F4F8),
-                    border: Border.all(color: const Color(0xFFB0C4DE), style: BorderStyle.solid),
+                    border: Border.all(
+                      color: const Color(0xFFB0C4DE),
+                      style: BorderStyle.solid,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: _imageFile != null
-                      ? ClipRRect(borderRadius: BorderRadius.circular(10), child: Image.file(_imageFile!, fit: BoxFit.cover))
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(_imageFile!, fit: BoxFit.cover),
+                        )
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(Icons.person, size: 100, color: Colors.grey),
                             SizedBox(height: 8),
-                            Text('Foto de perfil', style: TextStyle(color: Colors.grey)),
+                            Text(
+                              'Foto de perfil',
+                              style: TextStyle(color: Colors.grey),
+                            ),
                           ],
                         ),
                 ),
@@ -353,7 +573,11 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                           shape: BoxShape.circle,
                         ),
                         padding: const EdgeInsets.all(4),
-                        child: const Icon(Icons.close, color: Colors.white, size: 20),
+                        child: const Icon(
+                          Icons.close,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
                     ),
                   ),
@@ -373,6 +597,19 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton.filled(
+                tooltip: 'Ir al cuestionario',
+                onPressed: _irAlCuestionario,
+                icon: const Icon(Icons.arrow_forward),
+                color: Colors.white,
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xFF284b72),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -387,11 +624,325 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         border: const OutlineInputBorder(),
         enabled: false,
       ),
-      child: Text(value.isEmpty ? '-' : value, style: const TextStyle(fontSize: 16, color: Colors.black)),
+      child: Text(
+        value.isEmpty ? '-' : value,
+        style: const TextStyle(fontSize: 16, color: Colors.black),
+      ),
     );
   }
 
+  String _nombreLugarTrabajo(
+    Map<String, dynamic>? datos,
+    List<String> keys,
+    Map<String, String> nombresPorCodigo,
+  ) {
+    if (datos == null) return '';
+
+    for (final key in keys) {
+      final valor = datos[key]?.toString().trim();
+      if (valor == null || valor.isEmpty) continue;
+
+      if (key.contains('nombre')) return valor;
+      return nombresPorCodigo[valor.toUpperCase()] ?? valor;
+    }
+    return '';
+  }
+
   Widget _buildPreguntasForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Pregunta ${_preguntaActual + 1} de $_totalPreguntas',
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF284b72),
+          ),
+        ),
+        const SizedBox(height: 8),
+        LinearProgressIndicator(
+          value: (_preguntaActual + 1) / _totalPreguntas,
+          minHeight: 8,
+          borderRadius: BorderRadius.circular(8),
+          backgroundColor: const Color(0xFFDCE7F1),
+          valueColor: const AlwaysStoppedAnimation(Color(0xFF40A5DD)),
+        ),
+        const SizedBox(height: 20),
+        Card(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 2,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildPreguntaActual(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreguntaActual() {
+    final preguntas = <Widget>[
+      _radioPaso(
+        '1. ¿Cuál es el sexo según figura en el DNI?',
+        ['Femenino', 'Masculino', 'X'],
+        q1SexoDni,
+        (v) => q1SexoDni = v,
+      ),
+      _radioPaso(
+        '2. De acuerdo a la identidad de género, se considera...',
+        [
+          'Mujer',
+          'Varón',
+          'Mujer Trans',
+          'Varón Trans',
+          'No binario',
+          'Prefiero no decirlo',
+          'Otro/a',
+        ],
+        q2IdentidadGenero,
+        (v) => q2IdentidadGenero = v,
+      ),
+      _radioPaso(
+        '3. ¿Posee algún tipo de discapacidad?',
+        ['Sí', 'No'],
+        q3Discapacidad,
+        (v) => q3Discapacidad = v,
+      ),
+      _radioPaso(
+        '4. ¿Cuál es su nivel de estudios alcanzado?',
+        [
+          'Primario Incompleto',
+          'Primario Completo',
+          'Secundario Incompleto',
+          'Secundario Completo',
+          'Terciario Incompleto',
+          'Terciario Completo',
+          'Universitario Incompleto',
+          'Universitario Completo',
+          'Sin Estudios',
+        ],
+        q4Estudios,
+        (v) => q4Estudios = v,
+      ),
+      _radioPaso(
+        '5. ¿Sabe que siendo empleado municipal puede usar IOMA?',
+        ['Sí', 'No'],
+        q5IOMA,
+        (v) => q5IOMA = v,
+      ),
+      _radioPaso(
+        '6. ¿Cuál es su estado civil?',
+        [
+          'Soltero/a',
+          'Casado/a',
+          'Unión de hecho',
+          'Separado/a',
+          'Divorciado/a',
+          'Viudo/a',
+        ],
+        q6EstadoCivil,
+        (v) => q6EstadoCivil = v,
+      ),
+      _preguntaHogar(),
+      _radioPaso(
+        '7.1 ¿Cuántas hijas o hijos menores de edad tiene?',
+        ['1 hija/o', '2 hijas/os', '3 hijas/os', 'Más de tres hijos'],
+        q7_1HijosMenores,
+        (v) => q7_1HijosMenores = v,
+      ),
+      _radioPaso(
+        '7.2 ¿Alguno de sus hijos o hijas posee algún tipo de discapacidad?',
+        ['Sí', 'No'],
+        q7_2HijosDiscapacidad,
+        (v) => q7_2HijosDiscapacidad = v,
+      ),
+      _radioPaso(
+        '7.3 ¿Sus hijos menores de edad a cargo se encuentran escolarizados?',
+        ['Sí', 'No'],
+        q7_3HijosEscolarizados,
+        (v) => q7_3HijosEscolarizados = v,
+      ),
+      _radioPaso(
+        '8. ¿Quién aporta mayores ingresos en el hogar?',
+        [
+          'Yo',
+          'El progenitor/a de mis hijos',
+          'Alguno de mis hijos',
+          'Un familiar mío',
+          'Un familiar del progenitor/a de mis hijos',
+          'Mi pareja',
+          'No sabe / no contesta',
+          'Otro',
+        ],
+        q8Ingresos,
+        (v) => q8Ingresos = v,
+      ),
+      _radioPaso(
+        '9. ¿Cuál es su situación de vivienda actual?',
+        [
+          'Propia',
+          'Propia con hipoteca',
+          'Alquilada',
+          'Prestada',
+          'Familiar',
+          'La propiedad del padre/progenitor o madre/progenitor',
+          'No sabe / no contesta',
+          'Otro',
+        ],
+        q9Vivienda,
+        (v) => q9Vivienda = v,
+      ),
+      _radioPaso(
+        '10. ¿Tiene a cargo el cuidado de otros familiares?',
+        ['Sí', 'No'],
+        q10Cuidado,
+        (v) => q10Cuidado = v,
+      ),
+      _preguntaVacaciones(),
+      _radioPaso(
+        '12. Al finalizar sus vacaciones o licencia, ¿considera que logró recuperarse física y mentalmente del trabajo?',
+        ['Totalmente', 'En gran medida', 'Moderadamente', 'Poco', 'Nada'],
+        q12Recuperacion,
+        (v) => q12Recuperacion = v,
+      ),
+      _preguntaObservaciones(),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_preguntaActual > 0)
+          TextButton.icon(
+            onPressed: _preguntaAnterior,
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Anterior'),
+          ),
+        preguntas[_preguntaActual],
+      ],
+    );
+  }
+
+  Widget _preguntaHogar() {
+    const opciones = [
+      'Vivo sola/solo',
+      'Convivo con mi pareja',
+      'Vivo sola/solo con mis hijos',
+      'Vivo con pareja e hijos',
+      'Vivo con pareja, hijos y otros familiares',
+      'Vivo con otros familiares (no hijos/as)',
+    ];
+
+    return _buildRadioQuestion(
+      '7. ¿Cómo está conformado su hogar?',
+      opciones,
+      q7Hogar,
+      (respuesta) {
+        setState(() {
+          q7Hogar = respuesta;
+          _preguntaActual = _hogarSinHijos(respuesta) ? 10 : 7;
+        });
+      },
+    );
+  }
+
+  bool _hogarSinHijos(String? respuesta) =>
+      respuesta == 'Vivo sola/solo' || respuesta == 'Convivo con mi pareja';
+
+  Widget _radioPaso(
+    String pregunta,
+    List<String> opciones,
+    String? valor,
+    void Function(String) guardar,
+  ) {
+    return _buildRadioQuestion(pregunta, opciones, valor, (respuesta) {
+      setState(() {
+        guardar(respuesta);
+        if (_preguntaActual < _totalPreguntas - 1) _preguntaActual++;
+      });
+    });
+  }
+
+  Widget _preguntaVacaciones() => Column(
+    children: [
+      _buildCheckboxQuestion(
+        '11. Durante sus vacaciones o licencia ordinaria, ¿qué actividades realiza habitualmente?\nPuede marcar varias opciones.',
+        [
+          'Descanso en el hogar',
+          'Viajes o turismo',
+          'Actividades recreativas o deportivas',
+          'Actividades familiares o sociales',
+          'Estudios o capacitación',
+          'Actividades laborales adicionales',
+          'Otro',
+        ],
+        q11Vacaciones,
+        (actividad, marcada) => setState(
+          () => marcada == true
+              ? q11Vacaciones.add(actividad)
+              : q11Vacaciones.remove(actividad),
+        ),
+      ),
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: q11Vacaciones.isEmpty ? null : _siguientePregunta,
+          child: const Text('CONTINUAR'),
+        ),
+      ),
+    ],
+  );
+
+  Widget _preguntaObservaciones() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        '13. Observaciones adicionales',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF284b72),
+        ),
+      ),
+      const SizedBox(height: 12),
+      TextField(
+        controller: _observacionesController,
+        maxLines: 5,
+        decoration: const InputDecoration(
+          hintText: 'Ingrese sus observaciones',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 24),
+      SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _enviarFormulario,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF658ebc),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+          ),
+          child: const Text(
+            'GUARDAR FORMULARIO',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  void _siguientePregunta() => setState(() => _preguntaActual++);
+
+  void _preguntaAnterior() {
+    setState(() {
+      _preguntaActual = _preguntaActual == 10 && _hogarSinHijos(q7Hogar)
+          ? 6
+          : _preguntaActual - 1;
+    });
+  }
+
+  Widget _buildPreguntasFormLegacy() {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       elevation: 2,
@@ -409,66 +960,260 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // Genero
-            const Text('Genero', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('1. Cual es el sexo según figura en el DNI?', ['Femenino', 'Masculino', 'X'], q1SexoDni, (v) => setState(() => q1SexoDni = v)),
-            _buildRadioQuestion('2. De acuerdo a la identidad de genero, se considera...', ['Mujer', 'Varón', 'Mujer Trans', 'Varón Trans', 'No binario', 'Prefiero no decirlo', 'Otro/a'], q2IdentidadGenero, (v) => setState(() => q2IdentidadGenero = v)),
+            const Text(
+              'Genero',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '1. Cual es el sexo según figura en el DNI?',
+              ['Femenino', 'Masculino', 'X'],
+              q1SexoDni,
+              (v) => setState(() => q1SexoDni = v),
+            ),
+            _buildRadioQuestion(
+              '2. De acuerdo a la identidad de genero, se considera...',
+              [
+                'Mujer',
+                'Varón',
+                'Mujer Trans',
+                'Varón Trans',
+                'No binario',
+                'Prefiero no decirlo',
+                'Otro/a',
+              ],
+              q2IdentidadGenero,
+              (v) => setState(() => q2IdentidadGenero = v),
+            ),
             const Divider(),
 
             // Discapacidad
-            const Text('Discapacidad', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('3. Posee algun tipo de discapacidad?', ['Si', 'No'], q3Discapacidad, (v) => setState(() => q3Discapacidad = v)),
+            const Text(
+              'Discapacidad',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '3. Posee algun tipo de discapacidad?',
+              ['Si', 'No'],
+              q3Discapacidad,
+              (v) => setState(() => q3Discapacidad = v),
+            ),
             const Divider(),
 
             // Estudios
-            const Text('Estudios', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('4. Cual es su nivel de estudios alcanzado?', ['Primario Incompleto', 'Primario Completo', 'Secundario Incompleto', 'Secundario Completo', 'Terciario Incompleto', 'Terciario Completo', 'Universitario Incompleto', 'Universitario Completo', 'Sin Estudios'], q4Estudios, (v) => setState(() => q4Estudios = v)),
+            const Text(
+              'Estudios',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '4. Cual es su nivel de estudios alcanzado?',
+              [
+                'Primario Incompleto',
+                'Primario Completo',
+                'Secundario Incompleto',
+                'Secundario Completo',
+                'Terciario Incompleto',
+                'Terciario Completo',
+                'Universitario Incompleto',
+                'Universitario Completo',
+                'Sin Estudios',
+              ],
+              q4Estudios,
+              (v) => setState(() => q4Estudios = v),
+            ),
             const Divider(),
 
             // IOMA
-            const Text('IOMA', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('5. Sabe que siendo empleado municipal puede usar IOMA?', ['Si', 'No'], q5IOMA, (v) => setState(() => q5IOMA = v)),
+            const Text(
+              'IOMA',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '5. Sabe que siendo empleado municipal puede usar IOMA?',
+              ['Si', 'No'],
+              q5IOMA,
+              (v) => setState(() => q5IOMA = v),
+            ),
             const Divider(),
 
             // Estado Civil
-            const Text('Estado Civil', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('6. Cual es su estado civil?', ['Soltero/a', 'Casado/a', 'Unión de hecho', 'Separado/a', 'Divorciado/a', 'Viudo/a'], q6EstadoCivil, (v) => setState(() => q6EstadoCivil = v)),
+            const Text(
+              'Estado Civil',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '6. Cual es su estado civil?',
+              [
+                'Soltero/a',
+                'Casado/a',
+                'Unión de hecho',
+                'Separado/a',
+                'Divorciado/a',
+                'Viudo/a',
+              ],
+              q6EstadoCivil,
+              (v) => setState(() => q6EstadoCivil = v),
+            ),
             const Divider(),
 
             // Hogar
-            const Text('Hogar', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('7. Como esta conformado su hogar?', ['Vivo sola/solo', 'Convivo con mi pareja', 'Vivo sola/solo con mis hijos', 'Vivo con pareja e hijos', 'Vivo con pareja, hijos y otros familiares', 'Vivo con otros familiares (no hijos/as)'], q7Hogar, (v) => setState(() => q7Hogar = v)),
-            _buildRadioQuestion('7.1 Cuantas hijas o hijos menores de edad tiene?', ['1 hija/o', '2 hijas/os', '3 hijas/os', 'Mas de tres hijos'], q7_1HijosMenores, (v) => setState(() => q7_1HijosMenores = v)),
-            _buildRadioQuestion('7.2 Alguno de sus hijos o hijas posee algun tipo de discapacidad?', ['Si', 'No'], q7_2HijosDiscapacidad, (v) => setState(() => q7_2HijosDiscapacidad = v)),
-            _buildRadioQuestion('7.3 Sus hijos menores de edad a cargo se encuentran escolarizados?', ['Si', 'No'], q7_3HijosEscolarizados, (v) => setState(() => q7_3HijosEscolarizados = v)),
-            _buildRadioQuestion('8. Quien aporta mayores ingresos en el hogar?', ['Yo', 'El progenitor/a de mis hijos', 'Alguno de mis hijos', 'Un familiar mio', 'Un familiar del progenitor/a de mis hijos', 'Mi pareja', 'No sabe / no contesta', 'Otro'], q8Ingresos, (v) => setState(() => q8Ingresos = v)),
-            _buildRadioQuestion('9. Cual es su situacion de vivienda actual?', ['Propia', 'Propia con hipoteca', 'Alquilada', 'Prestada', 'Familiar', 'La propiedad del padre/progenitor o madre/progenit', 'No sabe / no contesta', 'Otro'], q9Vivienda, (v) => setState(() => q9Vivienda = v)),
+            const Text(
+              'Hogar',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '7. Como esta conformado su hogar?',
+              [
+                'Vivo sola/solo',
+                'Convivo con mi pareja',
+                'Vivo sola/solo con mis hijos',
+                'Vivo con pareja e hijos',
+                'Vivo con pareja, hijos y otros familiares',
+                'Vivo con otros familiares (no hijos/as)',
+              ],
+              q7Hogar,
+              (v) => setState(() => q7Hogar = v),
+            ),
+            _buildRadioQuestion(
+              '7.1 Cuantas hijas o hijos menores de edad tiene?',
+              ['1 hija/o', '2 hijas/os', '3 hijas/os', 'Mas de tres hijos'],
+              q7_1HijosMenores,
+              (v) => setState(() => q7_1HijosMenores = v),
+            ),
+            _buildRadioQuestion(
+              '7.2 Alguno de sus hijos o hijas posee algun tipo de discapacidad?',
+              ['Si', 'No'],
+              q7_2HijosDiscapacidad,
+              (v) => setState(() => q7_2HijosDiscapacidad = v),
+            ),
+            _buildRadioQuestion(
+              '7.3 Sus hijos menores de edad a cargo se encuentran escolarizados?',
+              ['Si', 'No'],
+              q7_3HijosEscolarizados,
+              (v) => setState(() => q7_3HijosEscolarizados = v),
+            ),
+            _buildRadioQuestion(
+              '8. Quien aporta mayores ingresos en el hogar?',
+              [
+                'Yo',
+                'El progenitor/a de mis hijos',
+                'Alguno de mis hijos',
+                'Un familiar mio',
+                'Un familiar del progenitor/a de mis hijos',
+                'Mi pareja',
+                'No sabe / no contesta',
+                'Otro',
+              ],
+              q8Ingresos,
+              (v) => setState(() => q8Ingresos = v),
+            ),
+            _buildRadioQuestion(
+              '9. Cual es su situacion de vivienda actual?',
+              [
+                'Propia',
+                'Propia con hipoteca',
+                'Alquilada',
+                'Prestada',
+                'Familiar',
+                'La propiedad del padre/progenitor o madre/progenit',
+                'No sabe / no contesta',
+                'Otro',
+              ],
+              q9Vivienda,
+              (v) => setState(() => q9Vivienda = v),
+            ),
             const Divider(),
 
             // Familiares a cargo
-            const Text('Familiares a cargo', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildRadioQuestion('10. Tiene a cargo el cuidado de otros familiares?', ['Si', 'No'], q10Cuidado, (v) => setState(() => q10Cuidado = v)),
+            const Text(
+              'Familiares a cargo',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildRadioQuestion(
+              '10. Tiene a cargo el cuidado de otros familiares?',
+              ['Si', 'No'],
+              q10Cuidado,
+              (v) => setState(() => q10Cuidado = v),
+            ),
             const Divider(),
 
             // Uso del tiempo
-            const Text('Uso del tiempo', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
-            _buildCheckboxQuestion('11. Durante sus vacaciones o licencia ordinaria, que actividades realiza habitualmente?\nPuede marcar varias opciones.', ['Descanso en el hogar', 'Viajes o turismo', 'Actividades recreativas o deportivas', 'Actividades familiares o sociales', 'Estudios o capacitacion', 'Actividades laborales adicionales', 'Otro'], q11Vacaciones, (v, checked) {
-              setState(() {
-                if (checked == true) {
-                  q11Vacaciones.add(v);
-                } else {
-                  q11Vacaciones.remove(v);
-                }
-              });
-            }),
-            _buildRadioQuestion('12. Al finalizar sus vacaciones o licencia, considera que logro recuperarse fisica y mentalmente del trabajo?', ['Totalmente', 'En gran medida', 'Moderadamente', 'Poco', 'Nada'], q12Recuperacion, (v) => setState(() => q12Recuperacion = v)),
+            const Text(
+              'Uso del tiempo',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
+            _buildCheckboxQuestion(
+              '11. Durante sus vacaciones o licencia ordinaria, que actividades realiza habitualmente?\nPuede marcar varias opciones.',
+              [
+                'Descanso en el hogar',
+                'Viajes o turismo',
+                'Actividades recreativas o deportivas',
+                'Actividades familiares o sociales',
+                'Estudios o capacitacion',
+                'Actividades laborales adicionales',
+                'Otro',
+              ],
+              q11Vacaciones,
+              (v, checked) {
+                setState(() {
+                  if (checked == true) {
+                    q11Vacaciones.add(v);
+                  } else {
+                    q11Vacaciones.remove(v);
+                  }
+                });
+              },
+            ),
+            _buildRadioQuestion(
+              '12. Al finalizar sus vacaciones o licencia, considera que logro recuperarse fisica y mentalmente del trabajo?',
+              ['Totalmente', 'En gran medida', 'Moderadamente', 'Poco', 'Nada'],
+              q12Recuperacion,
+              (v) => setState(() => q12Recuperacion = v),
+            ),
             const Divider(),
 
             // Observaciones
-            const Text('Observaciones', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF284b72))),
+            const Text(
+              'Observaciones',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF284b72),
+              ),
+            ),
             const SizedBox(height: 8),
-            const Text('13. Observaciones adicionales', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF284b72))),
+            const Text(
+              '13. Observaciones adicionales',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF284b72),
+              ),
+            ),
             const SizedBox(height: 8),
             TextField(
               controller: _observacionesController,
@@ -478,18 +1223,29 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 border: OutlineInputBorder(),
               ),
             ),
-            
+
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _enviarFormulario,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF658ebc), // Matching the button color in the screenshot
+                  backgroundColor: const Color(
+                    0xFF658ebc,
+                  ), // Matching the button color in the screenshot
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(5),
+                  ),
                 ),
-                child: const Text('GUARDAR FORMULARIO', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'GUARDAR FORMULARIO',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
@@ -498,47 +1254,79 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     );
   }
 
-  Widget _buildRadioQuestion(String question, List<String> options, String? groupValue, Function(String) onChanged) {
+  Widget _buildRadioQuestion(
+    String question,
+    List<String> options,
+    String? groupValue,
+    Function(String) onChanged,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(question, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF284b72))),
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF284b72),
+            ),
+          ),
           const SizedBox(height: 8),
-          ...options.map((opt) => RadioListTile<String>(
-            title: Text(opt),
-            value: opt,
-            groupValue: groupValue,
-            onChanged: (val) {
-              if (val != null) onChanged(val);
-            },
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            activeColor: const Color(0xFF40A5DD),
-          )).toList(),
+          ...options
+              .map(
+                (opt) => RadioListTile<String>(
+                  title: Text(opt),
+                  value: opt,
+                  groupValue: groupValue,
+                  onChanged: (val) {
+                    if (val != null) onChanged(val);
+                  },
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  activeColor: const Color(0xFF40A5DD),
+                ),
+              )
+              .toList(),
         ],
       ),
     );
   }
 
-  Widget _buildCheckboxQuestion(String question, List<String> options, List<String> groupValues, Function(String, bool?) onChanged) {
+  Widget _buildCheckboxQuestion(
+    String question,
+    List<String> options,
+    List<String> groupValues,
+    Function(String, bool?) onChanged,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(question, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF284b72))),
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF284b72),
+            ),
+          ),
           const SizedBox(height: 8),
-          ...options.map((opt) => CheckboxListTile(
-            title: Text(opt),
-            value: groupValues.contains(opt),
-            onChanged: (val) => onChanged(opt, val),
-            dense: true,
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            activeColor: const Color(0xFF40A5DD),
-          )).toList(),
+          ...options
+              .map(
+                (opt) => CheckboxListTile(
+                  title: Text(opt),
+                  value: groupValues.contains(opt),
+                  onChanged: (val) => onChanged(opt, val),
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  activeColor: const Color(0xFF40A5DD),
+                ),
+              )
+              .toList(),
         ],
       ),
     );
@@ -569,21 +1357,77 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       "q12_recuperacion": q12Recuperacion,
       "q13_observaciones": _observacionesController.text,
     };
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
-    
+
     bool success = await guardarRelevamiento(context, payload, _imageFile);
     Navigator.of(context).pop(); // Ocultar loader
-    
+
     if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Formulario guardado con éxito', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
+      await _mostrarGuardadoExitoso();
+      if (!mounted) return;
       _limpiarDatos();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Error al guardar el formulario', style: TextStyle(color: Colors.white)), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Error al guardar el formulario',
+            style: TextStyle(color: Colors.white),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
+  }
+
+  Future<void> _mostrarGuardadoExitoso() {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircleAvatar(
+                radius: 34,
+                backgroundColor: Color(0xFFE0F2E4),
+                child: Icon(Icons.check, size: 46, color: Colors.green),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Información guardada con éxito',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF284B72),
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF658EBC),
+                  ),
+                  child: const Text(
+                    'ACEPTAR',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
