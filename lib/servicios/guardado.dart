@@ -167,31 +167,34 @@ Future<Map<String, dynamic>?> buscarDatosLegajo(
     'https://backend.sim.lacosta.gob.ar/personal/personal/relevamientoMunicipal/traer',
   );
   try {
-    var response = await http.post(
-      url,
-      headers: <String, String>{
-        'Content-Type': 'application/json; charset=UTF-8',
-        'Authorization': 'Bearer ${globals.miTokenGlobal}',
-      },
-      body: jsonEncode({"legajo": legajo}),
-    );
+    var response = await http
+        .post(
+          url,
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
+            'Authorization': 'Bearer ${globals.miTokenGlobal}',
+          },
+          body: jsonEncode({"legajo": legajo}),
+        )
+        .timeout(const Duration(seconds: 15));
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
 
       // La respuesta viene dentro de 'datos_personales'
-      if (data is Map<String, dynamic> && data.containsKey('datos_personales')) {
-        return Map<String, dynamic>.from(data['datos_personales']);
+      if (data is Map && data.containsKey('datos_personales')) {
+        final personales = data['datos_personales'];
+        if (personales is Map && personales.isNotEmpty) {
+          return Map<String, dynamic>.from(personales);
+        }
+        return null;
       }
-      if (data is Map<String, dynamic>) return data;
       return null;
     } else {
-      if (context.mounted) dialogAceptar(context, 'Error al buscar legajo: ${response.statusCode}', 0);
       return null;
     }
   } catch (e) {
     print('Error buscarDatosLegajo: $e');
-    if (context.mounted) dialogAceptar(context, 'Error: $e', 0);
     return null;
   }
 }

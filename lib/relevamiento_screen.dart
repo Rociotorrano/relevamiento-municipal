@@ -26,6 +26,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   final TextEditingController _celularController = TextEditingController();
   final TextEditingController _numeroCalleController = TextEditingController();
   bool _mostrarCuestionario = false;
+  bool _buscandoLegajo = false;
 
   Map<String, dynamic>? datosPersonales;
   List<dynamic> localidades = [];
@@ -80,36 +81,41 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   }
 
   Future<void> _buscarDatos() async {
-    if (_legajoController.text.isEmpty) return;
+    if (_legajoController.text.isEmpty || _buscandoLegajo) return;
 
-    // Mostramos un indicador de carga
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    setState(() => _buscandoLegajo = true);
 
-    var datos = await buscarDatosLegajo(context, _legajoController.text);
+    Map<String, dynamic>? datos;
+    try {
+      datos = await buscarDatosLegajo(context, _legajoController.text);
+    } catch (_) {
+      datos = null;
+    } finally {
+      if (mounted) {
+        setState(() => _buscandoLegajo = false);
+      }
+    }
 
-    Navigator.of(context).pop(); // Ocultar carga
+    if (!mounted) return;
 
     if (datos != null && datos.isNotEmpty) {
+      final datosOk = datos;
       setState(() {
-        datosPersonales = datos;
+        datosPersonales = datosOk;
 
         // Campos del backend: telefono, domicilio, localidad (texto)
         _prefijoController.text = '';
-        _celularController.text = datos['telefono']?.toString() ?? '';
+        _celularController.text = datosOk['telefono']?.toString() ?? '';
         // El domicilio viene completo: "MITRE 1602 P 1 D8"
         // Lo mostramos en el campo número
-        _numeroCalleController.text = datos['domicilio']?.toString() ?? '';
+        _numeroCalleController.text = datosOk['domicilio']?.toString() ?? '';
 
         // Localidad viene como texto, buscamos coincidencia por nombre
-        String? locNombre = datos['localidad']?.toString()?.trim();
+        String? locNombre = datosOk['localidad']?.toString().trim();
         final locMatch = localidades.cast<Map<String, dynamic>?>().firstWhere(
           (e) =>
               e != null &&
-              (e['localidad']?.toString()?.trim().toUpperCase() ==
+              (e['localidad']?.toString().trim().toUpperCase() ==
                   locNombre?.toUpperCase()),
           orElse: () => null,
         );
@@ -133,7 +139,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 30, 24, 20),
@@ -170,12 +176,18 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               ),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  // Asegurar que no quede ningún estado de carga activo
+                  if (_buscandoLegajo) {
+                    setState(() => _buscandoLegajo = false);
+                  }
+                  Navigator.of(dialogContext).pop();
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF658EBC),
                 ),
                 child: const Text(
-                  'CONFIRMAR',
+                  'ACEPTAR',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -327,11 +339,20 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _buscarDatos,
-                icon: const Icon(Icons.search, color: Colors.white),
-                label: const Text(
-                  'BUSCAR DATOS',
-                  style: TextStyle(
+                onPressed: _buscandoLegajo ? null : _buscarDatos,
+                icon: _buscandoLegajo
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.search, color: Colors.white),
+                label: Text(
+                  _buscandoLegajo ? 'BUSCANDO...' : 'BUSCAR DATOS',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
