@@ -123,11 +123,17 @@ Future<List<RelevamientoMunicipal>?> login(
     if (response.statusCode == 200) {
       print('Datos enviados exitosamente.');
       final data = jsonDecode(response.body);
-      
-      bool isOk = data['estado'] == true || data['estado'] == 'true' || data['estado'] == 1 || data['estado'] == '1';
+
+      bool isOk =
+          data['estado'] == true ||
+          data['estado'] == 'true' ||
+          data['estado'] == 1 ||
+          data['estado'] == '1';
 
       if (isOk) {
-        miTokenGlobal = data['token']?.toString() ?? ''; // Asignar valor a la variable global
+        miTokenGlobal =
+            data['token']?.toString() ??
+            ''; // Asignar valor a la variable global
         print('token.');
         print(globals.miTokenGlobal);
 
@@ -135,26 +141,31 @@ Future<List<RelevamientoMunicipal>?> login(
           if (context.mounted) {
             Navigator.pushReplacement(
               context,
-              MaterialPageRoute(builder: (context) => const RelevamientoScreen()),
+              MaterialPageRoute(
+                builder: (context) => const RelevamientoScreen(),
+              ),
             );
           }
         }
         return null;
       } else {
         print('La respuesta es incorrecta. Datos del backend: $data');
-        if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
+        if (context.mounted)
+          dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
         return null;
       }
     } else {
       print('Falló con status: ${response.statusCode}');
       print('Razón: ${response.reasonPhrase}');
       print('Cuerpo de respuesta: ${response.body}');
-      if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
+      if (context.mounted)
+        dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
       return null;
     }
   } catch (error) {
     print('Error al intentar iniciar sesión: $error');
-    if (context.mounted) dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
+    if (context.mounted)
+      dialogAceptar(context, 'Usuario o contraseña incorrectos', 0);
     return null;
   }
 }
@@ -200,7 +211,9 @@ Future<Map<String, dynamic>?> buscarDatosLegajo(
 }
 
 Future<List<Map<String, dynamic>>> traerLocalidad(String localidades) async {
-  var url = Uri.parse('https://backend.sim.lacosta.gob.ar/generales/localidades');
+  var url = Uri.parse(
+    'https://backend.sim.lacosta.gob.ar/generales/localidades',
+  );
 
   try {
     final response = await http.post(
@@ -215,7 +228,9 @@ Future<List<Map<String, dynamic>>> traerLocalidad(String localidades) async {
     if (response.statusCode == 200) {
       final dynamic jsonBody = jsonDecode(response.body);
 
-      if (jsonBody is Map && jsonBody.containsKey('data') && jsonBody['data'] is List) {
+      if (jsonBody is Map &&
+          jsonBody.containsKey('data') &&
+          jsonBody['data'] is List) {
         return List<Map<String, dynamic>>.from(jsonBody['data']);
       } else if (jsonBody is List) {
         return List<Map<String, dynamic>>.from(jsonBody);
@@ -247,7 +262,9 @@ Future<List<Map<String, dynamic>>> traerCalle(String fklocalidad) async {
     if (response.statusCode == 200) {
       final dynamic jsonBody = jsonDecode(response.body);
 
-      if (jsonBody is Map && jsonBody.containsKey('data') && jsonBody['data'] is List) {
+      if (jsonBody is Map &&
+          jsonBody.containsKey('data') &&
+          jsonBody['data'] is List) {
         return List<Map<String, dynamic>>.from(jsonBody['data']);
       } else if (jsonBody is List) {
         return List<Map<String, dynamic>>.from(jsonBody);
@@ -269,11 +286,13 @@ Future<bool> guardarRelevamiento(
   File? imageFile,
 ) async {
   var url = Uri.parse(
+    // 'http://11.11.15.39:5003/personal/personal/relevamientoMunicipal/guardar',
     'https://backend.sim.lacosta.gob.ar/personal/personal/relevamientoMunicipal/guardar',
   );
   try {
     var request = http.MultipartRequest('POST', url);
     request.headers['Authorization'] = 'Bearer ${globals.miTokenGlobal}';
+    request.fields['app'] = 'true';
 
     payload.forEach((key, value) {
       if (value != null) {
@@ -290,6 +309,24 @@ Future<bool> guardarRelevamiento(
         await http.MultipartFile.fromPath('foto', imageFile.path),
       );
     }
+
+    // Reporte detallado de toda la información enviada al backend
+    print('==================== ENVIANDO AL BACKEND ====================');
+    print('Método: ${request.method}');
+    print('URL: ${request.url}');
+    print('Headers:');
+    request.headers.forEach((key, val) => print('  $key: $val'));
+    print('Campos enviados (request.fields):');
+    request.fields.forEach((key, val) => print('  $key: $val'));
+    if (request.files.isNotEmpty) {
+      print('Archivos enviados (request.files):');
+      for (var file in request.files) {
+        print(
+          '  - Campo: ${file.field}, Nombre: ${file.filename}, Tipo: ${file.contentType}',
+        );
+      }
+    }
+    print('=============================================================');
 
     var streamedResponse = await request.send();
     var response = await http.Response.fromStream(streamedResponse);
