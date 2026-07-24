@@ -26,12 +26,15 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   final TextEditingController _celularController = TextEditingController();
   final TextEditingController _numeroCalleController = TextEditingController();
   final TextEditingController _otroGeneroController = TextEditingController();
-  final TextEditingController _otraAdaptacionController = TextEditingController();
+  final TextEditingController _otraAdaptacionController =
+      TextEditingController();
   final TextEditingController _dniConyugeController = TextEditingController();
-  final TextEditingController _nombreConyugeController = TextEditingController();
+  final TextEditingController _nombreConyugeController =
+      TextEditingController();
   final TextEditingController _otroIngresosController = TextEditingController();
   final TextEditingController _otroViviendaController = TextEditingController();
-  final TextEditingController _otroVacacionesController = TextEditingController();
+  final TextEditingController _otroVacacionesController =
+      TextEditingController();
   bool _mostrarCuestionario = false;
   bool _buscandoLegajo = false;
 
@@ -82,7 +85,10 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     });
   }
 
-  Future<void> _cargarCalles(String fklocalidad, {String? domicilioCompleto}) async {
+  Future<void> _cargarCalles(
+    String fklocalidad, {
+    String? domicilioCompleto,
+  }) async {
     final cals = await traerCalle(fklocalidad);
     setState(() {
       calles = cals;
@@ -92,7 +98,9 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         int longestMatchLength = 0;
 
         for (var item in cals) {
-          String calleName = (item['calle']?.toString() ?? '').trim().toUpperCase();
+          String calleName = (item['calle']?.toString() ?? '')
+              .trim()
+              .toUpperCase();
           if (calleName.isNotEmpty && domUpper.startsWith(calleName)) {
             if (calleName.length > longestMatchLength) {
               longestMatchLength = calleName.length;
@@ -102,7 +110,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         }
 
         if (bestMatch != null) {
-          selectedCalle = bestMatch['pkcalle']?.toString() ?? bestMatch['id']?.toString();
+          selectedCalle =
+              bestMatch['pkcalle']?.toString() ?? bestMatch['id']?.toString();
           String resto = domicilioCompleto.substring(longestMatchLength).trim();
           _numeroCalleController.text = resto;
         } else {
@@ -893,7 +902,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       'Otro/a',
     ];
 
-    final bool esOtro = q2IdentidadGenero != null &&
+    final bool esOtro =
+        q2IdentidadGenero != null &&
         !opciones.sublist(0, opciones.length - 1).contains(q2IdentidadGenero);
     final String? valorRadio = esOtro ? 'Otro/a' : q2IdentidadGenero;
 
@@ -947,7 +957,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (q2IdentidadGenero == null ||
+                onPressed:
+                    (q2IdentidadGenero == null ||
                         q2IdentidadGenero!.trim().isEmpty)
                     ? null
                     : _siguientePregunta,
@@ -970,16 +981,23 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       'Otra',
     ];
 
-    final bool esOtra = q3_1DiscapacidadAdaptacion != null &&
-        q3_1DiscapacidadAdaptacion != 'No, no requiero ninguna adaptacion o asistencia.' &&
-        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia para movilidad.' &&
-        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia sensorial (auditiva, visual, etc).' &&
-        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia cognitiva o intelectual.' &&
-        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia emocional o mental.';
-    
+    final bool esOtra =
+        q3_1DiscapacidadAdaptacion != null &&
+        q3_1DiscapacidadAdaptacion !=
+            'No, no requiero ninguna adaptacion o asistencia.' &&
+        q3_1DiscapacidadAdaptacion !=
+            'Si, adaptaciones o asistencia para movilidad.' &&
+        q3_1DiscapacidadAdaptacion !=
+            'Si, adaptaciones o asistencia sensorial (auditiva, visual, etc).' &&
+        q3_1DiscapacidadAdaptacion !=
+            'Si, adaptaciones o asistencia cognitiva o intelectual.' &&
+        q3_1DiscapacidadAdaptacion !=
+            'Si, adaptaciones o asistencia emocional o mental.';
+
     final String? valorRadio3_1 = esOtra ? 'Otra' : q3_1DiscapacidadAdaptacion;
 
-    if (esOtra && _otraAdaptacionController.text != q3_1DiscapacidadAdaptacion) {
+    if (esOtra &&
+        _otraAdaptacionController.text != q3_1DiscapacidadAdaptacion) {
       _otraAdaptacionController.text = q3_1DiscapacidadAdaptacion!;
     }
 
@@ -1048,7 +1066,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: (q3_1DiscapacidadAdaptacion == null ||
+                  onPressed:
+                      (q3_1DiscapacidadAdaptacion == null ||
                           q3_1DiscapacidadAdaptacion!.trim().isEmpty)
                       ? null
                       : _siguientePregunta,
@@ -1136,7 +1155,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (_dniConyugeController.text.trim().isEmpty ||
+                onPressed:
+                    (_dniConyugeController.text.trim().isEmpty ||
                         _nombreConyugeController.text.trim().isEmpty)
                     ? null
                     : _siguientePregunta,
@@ -1174,8 +1194,11 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
 
     final List<String> opcionesLista = isLegacy ? opcionesLegacy : opciones;
 
-    final bool esOtro = q8Ingresos != null &&
-        !opcionesLista.sublist(0, opcionesLista.length - 1).contains(q8Ingresos);
+    final bool esOtro =
+        q8Ingresos != null &&
+        !opcionesLista
+            .sublist(0, opcionesLista.length - 1)
+            .contains(q8Ingresos);
     final String? valorRadio = esOtro ? 'Otro' : q8Ingresos;
 
     if (esOtro && _otroIngresosController.text != q8Ingresos) {
@@ -1228,8 +1251,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (q8Ingresos == null ||
-                        q8Ingresos!.trim().isEmpty)
+                onPressed: (q8Ingresos == null || q8Ingresos!.trim().isEmpty)
                     ? null
                     : _siguientePregunta,
                 child: const Text('CONTINUAR'),
@@ -1253,7 +1275,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       'Otro',
     ];
 
-    final bool esOtro = q9Vivienda != null &&
+    final bool esOtro =
+        q9Vivienda != null &&
         !opciones.sublist(0, opciones.length - 1).contains(q9Vivienda);
     final String? valorRadio = esOtro ? 'Otro' : q9Vivienda;
 
@@ -1307,8 +1330,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: (q9Vivienda == null ||
-                        q9Vivienda!.trim().isEmpty)
+                onPressed: (q9Vivienda == null || q9Vivienda!.trim().isEmpty)
                     ? null
                     : _siguientePregunta,
                 child: const Text('CONTINUAR'),
@@ -1386,8 +1408,10 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       }
     }
 
-    final bool esValido = q11Vacaciones.isNotEmpty &&
-        (!_otroVacacionesChecked || _otroVacacionesController.text.trim().isNotEmpty);
+    final bool esValido =
+        q11Vacaciones.isNotEmpty &&
+        (!_otroVacacionesChecked ||
+            _otroVacacionesController.text.trim().isNotEmpty);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1397,7 +1421,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
           [...opcionesEstandar, 'Otro'],
           [
             ...q11Vacaciones.where((e) => opcionesEstandar.contains(e)),
-            if (_otroVacacionesChecked) 'Otro'
+            if (_otroVacacionesChecked) 'Otro',
           ],
           (actividad, marcada) {
             setState(() {
@@ -1405,7 +1429,9 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 _otroVacacionesChecked = marcada == true;
                 if (!_otroVacacionesChecked) {
                   _otroVacacionesController.clear();
-                  q11Vacaciones.removeWhere((e) => !opcionesEstandar.contains(e));
+                  q11Vacaciones.removeWhere(
+                    (e) => !opcionesEstandar.contains(e),
+                  );
                 } else if (_otroVacacionesController.text.trim().isNotEmpty) {
                   q11Vacaciones.add(_otroVacacionesController.text.trim());
                 }
@@ -1432,7 +1458,9 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               ),
               onChanged: (text) {
                 setState(() {
-                  q11Vacaciones.removeWhere((e) => !opcionesEstandar.contains(e));
+                  q11Vacaciones.removeWhere(
+                    (e) => !opcionesEstandar.contains(e),
+                  );
                   if (text.trim().isNotEmpty) {
                     q11Vacaciones.add(text.trim());
                   }
@@ -1468,8 +1496,6 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       });
     });
   }
-
-
 
   Widget _preguntaObservaciones() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1832,10 +1858,10 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       "legajo": _legajoController.text,
       "celular_prefijo": _prefijoController.text,
       "celular_numero": _celularController.text,
-      "fk_localidad": selectedLocalidad,
-      "fk_calle": selectedCalle,
+      "fk_localidad": selectedLocalidad ?? '',
+      "fk_calle": selectedCalle ?? '',
       "numero_calle": _numeroCalleController.text,
-      "fk_secretaria": datosPersonales?['secretaria']?.toString(),
+      "fk_secretaria": datosPersonales?['secretaria']?.toString() ?? '',
       "lugar_trabajo": _nombreLugarTrabajo(datosPersonales, const [
         'nombre_dependencia',
         'dependencia_nombre',
@@ -1853,11 +1879,19 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       "fk_estado_civil": q6EstadoCivil,
       "conoce_ioma": q5IOMA,
       "fk_conformacion_hogar": q7Hogar,
-      "conyuge_dni": q6EstadoCivil == 'Casado/a' ? _dniConyugeController.text : null,
-      "conyuge_apellido_nombre": q6EstadoCivil == 'Casado/a' ? _nombreConyugeController.text : null,
+      "fk_situacion_habitacional": null,
+      "conyuge_dni": q6EstadoCivil == 'Casado/a'
+          ? _dniConyugeController.text
+          : null,
+      "conyuge_apellido_nombre": q6EstadoCivil == 'Casado/a'
+          ? _nombreConyugeController.text
+          : null,
       "fk_cantidad_hijos_menores": q7_1HijosMenores,
       "hijos_con_discapacidad": q7_2HijosDiscapacidad,
       "hijos_escolarizados": q7_3HijosEscolarizados,
+      "fk_participacion_progenitor_cuidado": null,
+      "fk_situacion_cuota_alimentaria": null,
+      "fk_definicion_cuota_alimentaria": null,
       "fk_mayor_aporte_ingresos_hogar": q8Ingresos,
       "mayor_aporte_ingresos_hogar_otro": _otroIngresosController.text,
       "fk_situacion_vivienda_actual": q9Vivienda,

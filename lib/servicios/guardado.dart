@@ -295,12 +295,10 @@ Future<bool> guardarRelevamiento(
     request.fields['app'] = 'true';
 
     payload.forEach((key, value) {
-      if (value != null) {
-        if (value is List) {
-          request.fields[key] = jsonEncode(value);
-        } else {
-          request.fields[key] = value.toString();
-        }
+      if (value is List) {
+        request.fields[key] = jsonEncode(value);
+      } else {
+        request.fields[key] = (value ?? '').toString();
       }
     });
 
