@@ -25,6 +25,13 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   final TextEditingController _prefijoController = TextEditingController();
   final TextEditingController _celularController = TextEditingController();
   final TextEditingController _numeroCalleController = TextEditingController();
+  final TextEditingController _otroGeneroController = TextEditingController();
+  final TextEditingController _otraAdaptacionController = TextEditingController();
+  final TextEditingController _dniConyugeController = TextEditingController();
+  final TextEditingController _nombreConyugeController = TextEditingController();
+  final TextEditingController _otroIngresosController = TextEditingController();
+  final TextEditingController _otroViviendaController = TextEditingController();
+  final TextEditingController _otroVacacionesController = TextEditingController();
   bool _mostrarCuestionario = false;
   bool _buscandoLegajo = false;
 
@@ -40,6 +47,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   String? q1SexoDni;
   String? q2IdentidadGenero;
   String? q3Discapacidad;
+  String? q3_1DiscapacidadAdaptacion;
   String? q4Estudios;
   String? q5IOMA;
   String? q6EstadoCivil;
@@ -50,7 +58,9 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   String? q8Ingresos;
   String? q9Vivienda;
   String? q10Cuidado;
+  String? q10_1CuidadoDiscapacidad;
   List<String> q11Vacaciones = [];
+  bool _otroVacacionesChecked = false;
   String? q12Recuperacion;
   final TextEditingController _observacionesController =
       TextEditingController();
@@ -72,11 +82,36 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     });
   }
 
-  Future<void> _cargarCalles(String fklocalidad) async {
+  Future<void> _cargarCalles(String fklocalidad, {String? domicilioCompleto}) async {
     final cals = await traerCalle(fklocalidad);
     setState(() {
       calles = cals;
-      selectedCalle = null; // reset calle al cambiar localidad
+      if (domicilioCompleto != null && domicilioCompleto.isNotEmpty) {
+        String domUpper = domicilioCompleto.trim().toUpperCase();
+        Map<String, dynamic>? bestMatch;
+        int longestMatchLength = 0;
+
+        for (var item in cals) {
+          String calleName = (item['calle']?.toString() ?? '').trim().toUpperCase();
+          if (calleName.isNotEmpty && domUpper.startsWith(calleName)) {
+            if (calleName.length > longestMatchLength) {
+              longestMatchLength = calleName.length;
+              bestMatch = Map<String, dynamic>.from(item);
+            }
+          }
+        }
+
+        if (bestMatch != null) {
+          selectedCalle = bestMatch['pkcalle']?.toString() ?? bestMatch['id']?.toString();
+          String resto = domicilioCompleto.substring(longestMatchLength).trim();
+          _numeroCalleController.text = resto;
+        } else {
+          selectedCalle = null;
+          _numeroCalleController.text = domicilioCompleto;
+        }
+      } else {
+        selectedCalle = null;
+      }
     });
   }
 
@@ -103,12 +138,36 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       setState(() {
         datosPersonales = datosOk;
 
-        // Campos del backend: telefono, domicilio, localidad (texto)
-        _prefijoController.text = '';
-        _celularController.text = datosOk['telefono']?.toString() ?? '';
-        // El domicilio viene completo: "MITRE 1602 P 1 D8"
-        // Lo mostramos en el campo número
-        _numeroCalleController.text = datosOk['domicilio']?.toString() ?? '';
+        // Procesar teléfono de forma inteligente
+        String? telRaw = datosOk['telefono']?.toString();
+        if (telRaw != null && telRaw.isNotEmpty) {
+          String cleanTel = telRaw.replaceAll('-', ' ').trim();
+          cleanTel = cleanTel.replaceAll(RegExp(r'\s+'), ' ');
+          final parts = cleanTel.split(' ');
+          if (parts.length > 1) {
+            _prefijoController.text = parts[0];
+            _celularController.text = parts.sublist(1).join(' ');
+          } else {
+            String num = cleanTel;
+            if (num.startsWith('02246')) {
+              _prefijoController.text = '02246';
+              _celularController.text = num.substring(5);
+            } else if (num.startsWith('2246')) {
+              _prefijoController.text = '2246';
+              _celularController.text = num.substring(4);
+            } else if (num.length > 6) {
+              int splitPos = num.length > 8 ? 4 : 3;
+              _prefijoController.text = num.substring(0, splitPos);
+              _celularController.text = num.substring(splitPos);
+            } else {
+              _prefijoController.text = '';
+              _celularController.text = num;
+            }
+          }
+        } else {
+          _prefijoController.text = '';
+          _celularController.text = '';
+        }
 
         // Localidad viene como texto, buscamos coincidencia por nombre
         String? locNombre = datosOk['localidad']?.toString().trim();
@@ -126,9 +185,12 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         calles = []; // limpiar calles hasta que se carguen
       });
 
-      // Cargar calles de la localidad del legajo
+      // Cargar calles de la localidad del legajo e intentar emparejar calle y número
       if (selectedLocalidad != null) {
-        _cargarCalles(selectedLocalidad!);
+        String? domRaw = datosOk['domicilio']?.toString();
+        _cargarCalles(selectedLocalidad!, domicilioCompleto: domRaw);
+      } else {
+        _numeroCalleController.text = datosOk['domicilio']?.toString() ?? '';
       }
     } else {
       await _mostrarErrorLegajo();
@@ -208,6 +270,13 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       _prefijoController.clear();
       _celularController.clear();
       _numeroCalleController.clear();
+      _otroGeneroController.clear();
+      _otraAdaptacionController.clear();
+      _dniConyugeController.clear();
+      _nombreConyugeController.clear();
+      _otroIngresosController.clear();
+      _otroViviendaController.clear();
+      _otroVacacionesController.clear();
       selectedLocalidad = null;
       selectedCalle = null;
       _imageFile = null;
@@ -215,6 +284,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       q1SexoDni = null;
       q2IdentidadGenero = null;
       q3Discapacidad = null;
+      q3_1DiscapacidadAdaptacion = null;
       q4Estudios = null;
       q5IOMA = null;
       q6EstadoCivil = null;
@@ -225,7 +295,9 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
       q8Ingresos = null;
       q9Vivienda = null;
       q10Cuidado = null;
+      q10_1CuidadoDiscapacidad = null;
       q11Vacaciones.clear();
+      _otroVacacionesChecked = false;
       q12Recuperacion = null;
       _observacionesController.clear();
       _preguntaActual = 0;
@@ -711,26 +783,8 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         q1SexoDni,
         (v) => q1SexoDni = v,
       ),
-      _radioPaso(
-        '2. De acuerdo a la identidad de género, se considera...',
-        [
-          'Mujer',
-          'Varón',
-          'Mujer Trans',
-          'Varón Trans',
-          'No binario',
-          'Prefiero no decirlo',
-          'Otro/a',
-        ],
-        q2IdentidadGenero,
-        (v) => q2IdentidadGenero = v,
-      ),
-      _radioPaso(
-        '3. ¿Posee algún tipo de discapacidad?',
-        ['Sí', 'No'],
-        q3Discapacidad,
-        (v) => q3Discapacidad = v,
-      ),
+      _preguntaIdentidadGeneroWidget(isLegacy: false),
+      _preguntaDiscapacidadWidget(isLegacy: false),
       _radioPaso(
         '4. ¿Cuál es su nivel de estudios alcanzado?',
         [
@@ -753,19 +807,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         q5IOMA,
         (v) => q5IOMA = v,
       ),
-      _radioPaso(
-        '6. ¿Cuál es su estado civil?',
-        [
-          'Soltero/a',
-          'Casado/a',
-          'Unión de hecho',
-          'Separado/a',
-          'Divorciado/a',
-          'Viudo/a',
-        ],
-        q6EstadoCivil,
-        (v) => q6EstadoCivil = v,
-      ),
+      _preguntaEstadoCivilWidget(isLegacy: false),
       _preguntaHogar(),
       _radioPaso(
         '7.1 ¿Cuántas hijas o hijos menores de edad tiene?',
@@ -785,43 +827,10 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
         q7_3HijosEscolarizados,
         (v) => q7_3HijosEscolarizados = v,
       ),
-      _radioPaso(
-        '8. ¿Quién aporta mayores ingresos en el hogar?',
-        [
-          'Yo',
-          'El progenitor/a de mis hijos',
-          'Alguno de mis hijos',
-          'Un familiar mío',
-          'Un familiar del progenitor/a de mis hijos',
-          'Mi pareja',
-          'No sabe / no contesta',
-          'Otro',
-        ],
-        q8Ingresos,
-        (v) => q8Ingresos = v,
-      ),
-      _radioPaso(
-        '9. ¿Cuál es su situación de vivienda actual?',
-        [
-          'Propia',
-          'Propia con hipoteca',
-          'Alquilada',
-          'Prestada',
-          'Familiar',
-          'La propiedad del padre/progenitor o madre/progenitor',
-          'No sabe / no contesta',
-          'Otro',
-        ],
-        q9Vivienda,
-        (v) => q9Vivienda = v,
-      ),
-      _radioPaso(
-        '10. ¿Tiene a cargo el cuidado de otros familiares?',
-        ['Sí', 'No'],
-        q10Cuidado,
-        (v) => q10Cuidado = v,
-      ),
-      _preguntaVacaciones(),
+      _preguntaIngresosWidget(isLegacy: false),
+      _preguntaViviendaWidget(isLegacy: false),
+      _preguntaCuidadoWidget(isLegacy: false),
+      _preguntaVacacionesWidget(isLegacy: false),
       _radioPaso(
         '12. Al finalizar sus vacaciones o licencia, ¿considera que logró recuperarse física y mentalmente del trabajo?',
         ['Totalmente', 'En gran medida', 'Moderadamente', 'Poco', 'Nada'],
@@ -869,7 +878,582 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   }
 
   bool _hogarSinHijos(String? respuesta) =>
-      respuesta == 'Vivo sola/solo' || respuesta == 'Convivo con mi pareja';
+      respuesta == 'Vivo sola/solo' ||
+      respuesta == 'Convivo con mi pareja' ||
+      respuesta == 'Vivo con otros familiares (no hijos/as)';
+
+  Widget _preguntaIdentidadGeneroWidget({required bool isLegacy}) {
+    final opciones = [
+      'Mujer',
+      'Varón',
+      'Mujer Trans',
+      'Varón Trans',
+      'No binario',
+      'Prefiero no decirlo',
+      'Otro/a',
+    ];
+
+    final bool esOtro = q2IdentidadGenero != null &&
+        !opciones.sublist(0, opciones.length - 1).contains(q2IdentidadGenero);
+    final String? valorRadio = esOtro ? 'Otro/a' : q2IdentidadGenero;
+
+    if (esOtro && _otroGeneroController.text != q2IdentidadGenero) {
+      _otroGeneroController.text = q2IdentidadGenero!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '2. De acuerdo a la identidad de genero, se considera...'
+              : '2. De acuerdo a la identidad de género, se considera...',
+          opciones,
+          valorRadio,
+          (respuesta) {
+            setState(() {
+              if (respuesta == 'Otro/a') {
+                _otroGeneroController.clear();
+                q2IdentidadGenero = '';
+              } else {
+                q2IdentidadGenero = respuesta;
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (valorRadio == 'Otro/a') ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextField(
+              controller: _otroGeneroController,
+              decoration: const InputDecoration(
+                labelText: 'Especifique su identidad de género',
+                hintText: 'Escriba aquí...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (text) {
+                setState(() {
+                  q2IdentidadGenero = text.trim();
+                });
+              },
+            ),
+          ),
+          if (!isLegacy) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (q2IdentidadGenero == null ||
+                        q2IdentidadGenero!.trim().isEmpty)
+                    ? null
+                    : _siguientePregunta,
+                child: const Text('CONTINUAR'),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaDiscapacidadWidget({required bool isLegacy}) {
+    final opciones3_1 = [
+      'No, no requiero ninguna adaptacion o asistencia.',
+      'Si, adaptaciones o asistencia para movilidad.',
+      'Si, adaptaciones o asistencia sensorial (auditiva, visual, etc).',
+      'Si, adaptaciones o asistencia cognitiva o intelectual.',
+      'Si, adaptaciones o asistencia emocional o mental.',
+      'Otra',
+    ];
+
+    final bool esOtra = q3_1DiscapacidadAdaptacion != null &&
+        q3_1DiscapacidadAdaptacion != 'No, no requiero ninguna adaptacion o asistencia.' &&
+        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia para movilidad.' &&
+        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia sensorial (auditiva, visual, etc).' &&
+        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia cognitiva o intelectual.' &&
+        q3_1DiscapacidadAdaptacion != 'Si, adaptaciones o asistencia emocional o mental.';
+    
+    final String? valorRadio3_1 = esOtra ? 'Otra' : q3_1DiscapacidadAdaptacion;
+
+    if (esOtra && _otraAdaptacionController.text != q3_1DiscapacidadAdaptacion) {
+      _otraAdaptacionController.text = q3_1DiscapacidadAdaptacion!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '3. Posee algun tipo de discapacidad?'
+              : '3. ¿Posee algún tipo de discapacidad?',
+          isLegacy ? ['Si', 'No'] : ['Sí', 'No'],
+          q3Discapacidad,
+          (respuesta) {
+            setState(() {
+              q3Discapacidad = respuesta;
+              if (respuesta == 'No' || respuesta == 'No') {
+                q3_1DiscapacidadAdaptacion = null;
+                _otraAdaptacionController.clear();
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (q3Discapacidad == 'Sí' || q3Discapacidad == 'Si') ...[
+          const Divider(),
+          _buildRadioQuestion(
+            '3.1 Requiere alguna adaptacion o asistencia debido a una condicion de salud o discapacidad?',
+            opciones3_1,
+            valorRadio3_1,
+            (respuesta) {
+              setState(() {
+                if (respuesta == 'Otra') {
+                  _otraAdaptacionController.clear();
+                  q3_1DiscapacidadAdaptacion = '';
+                } else {
+                  q3_1DiscapacidadAdaptacion = respuesta;
+                  if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                    _preguntaActual++;
+                  }
+                }
+              });
+            },
+          ),
+          if (valorRadio3_1 == 'Otra') ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: TextField(
+                controller: _otraAdaptacionController,
+                decoration: const InputDecoration(
+                  labelText: 'Otra adaptacion o asistencia',
+                  hintText: 'Escriba aquí...',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (text) {
+                  setState(() {
+                    q3_1DiscapacidadAdaptacion = text.trim();
+                  });
+                },
+              ),
+            ),
+            if (!isLegacy) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: (q3_1DiscapacidadAdaptacion == null ||
+                          q3_1DiscapacidadAdaptacion!.trim().isEmpty)
+                      ? null
+                      : _siguientePregunta,
+                  child: const Text('CONTINUAR'),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaEstadoCivilWidget({required bool isLegacy}) {
+    final opciones = [
+      'Soltero/a',
+      'Casado/a',
+      'Unión de hecho',
+      'Separado/a',
+      'Divorciado/a',
+      'Viudo/a',
+    ];
+
+    final bool esCasado = q6EstadoCivil == 'Casado/a';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '6. Cual es su estado civil?'
+              : '6. ¿Cuál es su estado civil?',
+          opciones,
+          q6EstadoCivil,
+          (respuesta) {
+            setState(() {
+              q6EstadoCivil = respuesta;
+              if (respuesta != 'Casado/a') {
+                _dniConyugeController.clear();
+                _nombreConyugeController.clear();
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (esCasado) ...[
+          const SizedBox(height: 12),
+          const Text(
+            '6.1 Datos del cónyuge',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF284b72),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _dniConyugeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'DNI del cónyuge',
+              prefixIcon: Icon(Icons.badge),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (val) {
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nombreConyugeController,
+            decoration: const InputDecoration(
+              labelText: 'Nombre y apellido del cónyuge',
+              prefixIcon: Icon(Icons.person),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (val) {
+              setState(() {});
+            },
+          ),
+          if (!isLegacy) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (_dniConyugeController.text.trim().isEmpty ||
+                        _nombreConyugeController.text.trim().isEmpty)
+                    ? null
+                    : _siguientePregunta,
+                child: const Text('CONTINUAR'),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaIngresosWidget({required bool isLegacy}) {
+    final opciones = [
+      'Yo',
+      'El progenitor/a de mis hijos',
+      'Alguno de mis hijos',
+      'Un familiar mío',
+      'Un familiar del progenitor/a de mis hijos',
+      'Mi pareja',
+      'No sabe / no contesta',
+      'Otro',
+    ];
+
+    final opcionesLegacy = [
+      'Yo',
+      'El progenitor/a de mis hijos',
+      'Alguno de mis hijos',
+      'Un familiar mio',
+      'Un familiar del progenitor/a de mis hijos',
+      'Mi pareja',
+      'No sabe / no contesta',
+      'Otro',
+    ];
+
+    final List<String> opcionesLista = isLegacy ? opcionesLegacy : opciones;
+
+    final bool esOtro = q8Ingresos != null &&
+        !opcionesLista.sublist(0, opcionesLista.length - 1).contains(q8Ingresos);
+    final String? valorRadio = esOtro ? 'Otro' : q8Ingresos;
+
+    if (esOtro && _otroIngresosController.text != q8Ingresos) {
+      _otroIngresosController.text = q8Ingresos!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '8. Quien aporta mayores ingresos en el hogar?'
+              : '8. ¿Quién aporta mayores ingresos en el hogar?',
+          opcionesLista,
+          valorRadio,
+          (respuesta) {
+            setState(() {
+              if (respuesta == 'Otro') {
+                _otroIngresosController.clear();
+                q8Ingresos = '';
+              } else {
+                q8Ingresos = respuesta;
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (valorRadio == 'Otro') ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextField(
+              controller: _otroIngresosController,
+              decoration: const InputDecoration(
+                labelText: 'Especifique quién aporta mayores ingresos',
+                hintText: 'Escriba aquí...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (text) {
+                setState(() {
+                  q8Ingresos = text.trim();
+                });
+              },
+            ),
+          ),
+          if (!isLegacy) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (q8Ingresos == null ||
+                        q8Ingresos!.trim().isEmpty)
+                    ? null
+                    : _siguientePregunta,
+                child: const Text('CONTINUAR'),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaViviendaWidget({required bool isLegacy}) {
+    final opciones = [
+      'Propia',
+      'Propia con hipoteca',
+      'Alquilada',
+      'Prestada',
+      'Familiar',
+      'La propiedad del padre/progenitor o madre/progenitor',
+      'No sabe / no contesta',
+      'Otro',
+    ];
+
+    final bool esOtro = q9Vivienda != null &&
+        !opciones.sublist(0, opciones.length - 1).contains(q9Vivienda);
+    final String? valorRadio = esOtro ? 'Otro' : q9Vivienda;
+
+    if (esOtro && _otroViviendaController.text != q9Vivienda) {
+      _otroViviendaController.text = q9Vivienda!;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '9. Cual es su situación de vivienda actual?'
+              : '9. ¿Cuál es su situación de vivienda actual?',
+          opciones,
+          valorRadio,
+          (respuesta) {
+            setState(() {
+              if (respuesta == 'Otro') {
+                _otroViviendaController.clear();
+                q9Vivienda = '';
+              } else {
+                q9Vivienda = respuesta;
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (valorRadio == 'Otro') ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextField(
+              controller: _otroViviendaController,
+              decoration: const InputDecoration(
+                labelText: 'Especifique su situación de vivienda',
+                hintText: 'Escriba aquí...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (text) {
+                setState(() {
+                  q9Vivienda = text.trim();
+                });
+              },
+            ),
+          ),
+          if (!isLegacy) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: (q9Vivienda == null ||
+                        q9Vivienda!.trim().isEmpty)
+                    ? null
+                    : _siguientePregunta,
+                child: const Text('CONTINUAR'),
+              ),
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaCuidadoWidget({required bool isLegacy}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRadioQuestion(
+          isLegacy
+              ? '10. Tiene a cargo el cuidado de otros familiares? (No incluye hijos)'
+              : '10. ¿Tiene a cargo el cuidado de otros familiares? (No incluye hijos)',
+          isLegacy ? ['Si', 'No'] : ['Sí', 'No'],
+          q10Cuidado,
+          (respuesta) {
+            setState(() {
+              q10Cuidado = respuesta;
+              if (respuesta == 'No' || respuesta == 'No') {
+                q10_1CuidadoDiscapacidad = null;
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              }
+            });
+          },
+        ),
+        if (q10Cuidado == 'Sí' || q10Cuidado == 'Si') ...[
+          const Divider(),
+          _buildRadioQuestion(
+            isLegacy
+                ? '10.1 La persona a su cargo tiene discapacidad o una limitacion permanente?'
+                : '10.1 ¿La persona a su cargo tiene discapacidad o una limitación permanente?',
+            isLegacy ? ['Si', 'No'] : ['Sí', 'No'],
+            q10_1CuidadoDiscapacidad,
+            (respuesta) {
+              setState(() {
+                q10_1CuidadoDiscapacidad = respuesta;
+                if (!isLegacy && _preguntaActual < _totalPreguntas - 1) {
+                  _preguntaActual++;
+                }
+              });
+            },
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _preguntaVacacionesWidget({required bool isLegacy}) {
+    final List<String> opcionesEstandar = [
+      'Descanso en el hogar',
+      'Viajes o turismo',
+      'Actividades recreativas o deportivas',
+      'Actividades familiares o sociales',
+      'Estudios o capacitación',
+      'Actividades laborales adicionales',
+    ];
+
+    final String customVal = q11Vacaciones.firstWhere(
+      (e) => !opcionesEstandar.contains(e),
+      orElse: () => '',
+    );
+
+    if (customVal.isNotEmpty && !_otroVacacionesChecked) {
+      _otroVacacionesChecked = true;
+      if (_otroVacacionesController.text != customVal) {
+        _otroVacacionesController.text = customVal;
+      }
+    }
+
+    final bool esValido = q11Vacaciones.isNotEmpty &&
+        (!_otroVacacionesChecked || _otroVacacionesController.text.trim().isNotEmpty);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildCheckboxQuestion(
+          '11. Durante sus vacaciones o licencia ordinaria, ¿qué actividades realiza habitualmente?\nPuede marcar varias opciones.',
+          [...opcionesEstandar, 'Otro'],
+          [
+            ...q11Vacaciones.where((e) => opcionesEstandar.contains(e)),
+            if (_otroVacacionesChecked) 'Otro'
+          ],
+          (actividad, marcada) {
+            setState(() {
+              if (actividad == 'Otro') {
+                _otroVacacionesChecked = marcada == true;
+                if (!_otroVacacionesChecked) {
+                  _otroVacacionesController.clear();
+                  q11Vacaciones.removeWhere((e) => !opcionesEstandar.contains(e));
+                } else if (_otroVacacionesController.text.trim().isNotEmpty) {
+                  q11Vacaciones.add(_otroVacacionesController.text.trim());
+                }
+              } else {
+                if (marcada == true) {
+                  q11Vacaciones.add(actividad);
+                } else {
+                  q11Vacaciones.remove(actividad);
+                }
+              }
+            });
+          },
+        ),
+        if (_otroVacacionesChecked) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: TextField(
+              controller: _otroVacacionesController,
+              decoration: const InputDecoration(
+                labelText: 'Especifique otra actividad',
+                hintText: 'Escriba aquí...',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (text) {
+                setState(() {
+                  q11Vacaciones.removeWhere((e) => !opcionesEstandar.contains(e));
+                  if (text.trim().isNotEmpty) {
+                    q11Vacaciones.add(text.trim());
+                  }
+                });
+              },
+            ),
+          ),
+        ],
+        if (!isLegacy) ...[
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: esValido ? _siguientePregunta : null,
+              child: const Text('CONTINUAR'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 
   Widget _radioPaso(
     String pregunta,
@@ -885,35 +1469,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
     });
   }
 
-  Widget _preguntaVacaciones() => Column(
-    children: [
-      _buildCheckboxQuestion(
-        '11. Durante sus vacaciones o licencia ordinaria, ¿qué actividades realiza habitualmente?\nPuede marcar varias opciones.',
-        [
-          'Descanso en el hogar',
-          'Viajes o turismo',
-          'Actividades recreativas o deportivas',
-          'Actividades familiares o sociales',
-          'Estudios o capacitación',
-          'Actividades laborales adicionales',
-          'Otro',
-        ],
-        q11Vacaciones,
-        (actividad, marcada) => setState(
-          () => marcada == true
-              ? q11Vacaciones.add(actividad)
-              : q11Vacaciones.remove(actividad),
-        ),
-      ),
-      SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          onPressed: q11Vacaciones.isEmpty ? null : _siguientePregunta,
-          child: const Text('CONTINUAR'),
-        ),
-      ),
-    ],
-  );
+
 
   Widget _preguntaObservaciones() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -996,20 +1552,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               q1SexoDni,
               (v) => setState(() => q1SexoDni = v),
             ),
-            _buildRadioQuestion(
-              '2. De acuerdo a la identidad de genero, se considera...',
-              [
-                'Mujer',
-                'Varón',
-                'Mujer Trans',
-                'Varón Trans',
-                'No binario',
-                'Prefiero no decirlo',
-                'Otro/a',
-              ],
-              q2IdentidadGenero,
-              (v) => setState(() => q2IdentidadGenero = v),
-            ),
+            _preguntaIdentidadGeneroWidget(isLegacy: true),
             const Divider(),
 
             // Discapacidad
@@ -1020,12 +1563,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 color: Color(0xFF284b72),
               ),
             ),
-            _buildRadioQuestion(
-              '3. Posee algun tipo de discapacidad?',
-              ['Si', 'No'],
-              q3Discapacidad,
-              (v) => setState(() => q3Discapacidad = v),
-            ),
+            _preguntaDiscapacidadWidget(isLegacy: true),
             const Divider(),
 
             // Estudios
@@ -1078,19 +1616,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 color: Color(0xFF284b72),
               ),
             ),
-            _buildRadioQuestion(
-              '6. Cual es su estado civil?',
-              [
-                'Soltero/a',
-                'Casado/a',
-                'Unión de hecho',
-                'Separado/a',
-                'Divorciado/a',
-                'Viudo/a',
-              ],
-              q6EstadoCivil,
-              (v) => setState(() => q6EstadoCivil = v),
-            ),
+            _preguntaEstadoCivilWidget(isLegacy: true),
             const Divider(),
 
             // Hogar
@@ -1114,54 +1640,28 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
               q7Hogar,
               (v) => setState(() => q7Hogar = v),
             ),
-            _buildRadioQuestion(
-              '7.1 Cuantas hijas o hijos menores de edad tiene?',
-              ['1 hija/o', '2 hijas/os', '3 hijas/os', 'Mas de tres hijos'],
-              q7_1HijosMenores,
-              (v) => setState(() => q7_1HijosMenores = v),
-            ),
-            _buildRadioQuestion(
-              '7.2 Alguno de sus hijos o hijas posee algun tipo de discapacidad?',
-              ['Si', 'No'],
-              q7_2HijosDiscapacidad,
-              (v) => setState(() => q7_2HijosDiscapacidad = v),
-            ),
-            _buildRadioQuestion(
-              '7.3 Sus hijos menores de edad a cargo se encuentran escolarizados?',
-              ['Si', 'No'],
-              q7_3HijosEscolarizados,
-              (v) => setState(() => q7_3HijosEscolarizados = v),
-            ),
-            _buildRadioQuestion(
-              '8. Quien aporta mayores ingresos en el hogar?',
-              [
-                'Yo',
-                'El progenitor/a de mis hijos',
-                'Alguno de mis hijos',
-                'Un familiar mio',
-                'Un familiar del progenitor/a de mis hijos',
-                'Mi pareja',
-                'No sabe / no contesta',
-                'Otro',
-              ],
-              q8Ingresos,
-              (v) => setState(() => q8Ingresos = v),
-            ),
-            _buildRadioQuestion(
-              '9. Cual es su situacion de vivienda actual?',
-              [
-                'Propia',
-                'Propia con hipoteca',
-                'Alquilada',
-                'Prestada',
-                'Familiar',
-                'La propiedad del padre/progenitor o madre/progenit',
-                'No sabe / no contesta',
-                'Otro',
-              ],
-              q9Vivienda,
-              (v) => setState(() => q9Vivienda = v),
-            ),
+            if (!_hogarSinHijos(q7Hogar)) ...[
+              _buildRadioQuestion(
+                '7.1 Cuantas hijas o hijos menores de edad tiene?',
+                ['1 hija/o', '2 hijas/os', '3 hijas/os', 'Mas de tres hijos'],
+                q7_1HijosMenores,
+                (v) => setState(() => q7_1HijosMenores = v),
+              ),
+              _buildRadioQuestion(
+                '7.2 Alguno de sus hijos o hijas posee algun tipo de discapacidad?',
+                ['Si', 'No'],
+                q7_2HijosDiscapacidad,
+                (v) => setState(() => q7_2HijosDiscapacidad = v),
+              ),
+              _buildRadioQuestion(
+                '7.3 Sus hijos menores de edad a cargo se encuentran escolarizados?',
+                ['Si', 'No'],
+                q7_3HijosEscolarizados,
+                (v) => setState(() => q7_3HijosEscolarizados = v),
+              ),
+            ],
+            _preguntaIngresosWidget(isLegacy: true),
+            _preguntaViviendaWidget(isLegacy: true),
             const Divider(),
 
             // Familiares a cargo
@@ -1172,12 +1672,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 color: Color(0xFF284b72),
               ),
             ),
-            _buildRadioQuestion(
-              '10. Tiene a cargo el cuidado de otros familiares?',
-              ['Si', 'No'],
-              q10Cuidado,
-              (v) => setState(() => q10Cuidado = v),
-            ),
+            _preguntaCuidadoWidget(isLegacy: true),
             const Divider(),
 
             // Uso del tiempo
@@ -1188,28 +1683,7 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
                 color: Color(0xFF284b72),
               ),
             ),
-            _buildCheckboxQuestion(
-              '11. Durante sus vacaciones o licencia ordinaria, que actividades realiza habitualmente?\nPuede marcar varias opciones.',
-              [
-                'Descanso en el hogar',
-                'Viajes o turismo',
-                'Actividades recreativas o deportivas',
-                'Actividades familiares o sociales',
-                'Estudios o capacitacion',
-                'Actividades laborales adicionales',
-                'Otro',
-              ],
-              q11Vacaciones,
-              (v, checked) {
-                setState(() {
-                  if (checked == true) {
-                    q11Vacaciones.add(v);
-                  } else {
-                    q11Vacaciones.remove(v);
-                  }
-                });
-              },
-            ),
+            _preguntaVacacionesWidget(isLegacy: true),
             _buildRadioQuestion(
               '12. Al finalizar sus vacaciones o licencia, considera que logro recuperarse fisica y mentalmente del trabajo?',
               ['Totalmente', 'En gran medida', 'Moderadamente', 'Poco', 'Nada'],
@@ -1356,27 +1830,44 @@ class _RelevamientoScreenState extends State<RelevamientoScreen> {
   Future<void> _enviarFormulario() async {
     Map<String, dynamic> payload = {
       "legajo": _legajoController.text,
-      "prefijo": _prefijoController.text,
-      "celular": _celularController.text,
-      "id_localidad": selectedLocalidad,
-      "id_calle": selectedCalle,
+      "celular_prefijo": _prefijoController.text,
+      "celular_numero": _celularController.text,
+      "fk_localidad": selectedLocalidad,
+      "fk_calle": selectedCalle,
       "numero_calle": _numeroCalleController.text,
-      "q1_sexo_dni": q1SexoDni,
-      "q2_identidad_genero": q2IdentidadGenero,
-      "q3_discapacidad": q3Discapacidad,
-      "q4_estudios": q4Estudios,
-      "q5_ioma": q5IOMA,
-      "q6_estado_civil": q6EstadoCivil,
-      "q7_hogar": q7Hogar,
-      "q7_1_hijos_menores": q7_1HijosMenores,
-      "q7_2_hijos_discapacidad": q7_2HijosDiscapacidad,
-      "q7_3_hijos_escolarizados": q7_3HijosEscolarizados,
-      "q8_ingresos": q8Ingresos,
-      "q9_vivienda": q9Vivienda,
-      "q10_cuidado": q10Cuidado,
-      "q11_vacaciones": q11Vacaciones,
-      "q12_recuperacion": q12Recuperacion,
-      "q13_observaciones": _observacionesController.text,
+      "fk_secretaria": datosPersonales?['secretaria']?.toString(),
+      "lugar_trabajo": _nombreLugarTrabajo(datosPersonales, const [
+        'nombre_dependencia',
+        'dependencia_nombre',
+        'nombre_lugar_trabajo',
+        'lugar_trabajo',
+        'dependencia',
+      ], _dependenciasPorCodigo),
+      "fk_genero_nacer": q1SexoDni,
+      "fk_genero_identidad": q2IdentidadGenero,
+      "genero_identidad_otro": _otroGeneroController.text,
+      "tiene_discapacidad": q3Discapacidad,
+      "fk_requiere_adaptacion": q3_1DiscapacidadAdaptacion,
+      "adaptacion_detalle": _otraAdaptacionController.text,
+      "fk_nivel_educacional": q4Estudios,
+      "fk_estado_civil": q6EstadoCivil,
+      "conoce_ioma": q5IOMA,
+      "fk_conformacion_hogar": q7Hogar,
+      "conyuge_dni": q6EstadoCivil == 'Casado/a' ? _dniConyugeController.text : null,
+      "conyuge_apellido_nombre": q6EstadoCivil == 'Casado/a' ? _nombreConyugeController.text : null,
+      "fk_cantidad_hijos_menores": q7_1HijosMenores,
+      "hijos_con_discapacidad": q7_2HijosDiscapacidad,
+      "hijos_escolarizados": q7_3HijosEscolarizados,
+      "fk_mayor_aporte_ingresos_hogar": q8Ingresos,
+      "mayor_aporte_ingresos_hogar_otro": _otroIngresosController.text,
+      "fk_situacion_vivienda_actual": q9Vivienda,
+      "situacion_vivienda_otro": _otroViviendaController.text,
+      "cuida_otros_familiares": q10Cuidado,
+      "familiar_a_cargo_discapacidad": q10_1CuidadoDiscapacidad,
+      "fk_recuperacion_post_licencia": q12Recuperacion,
+      "vac_otro": _otroVacacionesController.text,
+      "observaciones": _observacionesController.text,
+      "actividades_vacaciones_habituales": q11Vacaciones,
     };
 
     showDialog(
